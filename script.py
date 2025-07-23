@@ -13,11 +13,7 @@ GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
-    "bevattningsförbud",
-    "vattenförbud",
-    "vattningsförbud",
-    "torka",
-    "begränsning"
+    "bevattningsförbud"
 ]
 
 CONTEXT_CHARS = 100  # antal tecken före och efter nyckelord
