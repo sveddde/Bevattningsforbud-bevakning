@@ -53,9 +53,12 @@ def check_url(url):
 def send_email(subject, body):
     msg = MIMEText(body, "html")
     msg["Subject"] = subject
-    msg["From"] = GMAIL_USER
+    msg["From"] = GMAIL_USER  # här kan du byta namn på variabeln till t.ex. EMAIL_USER om du vill
     msg["To"] = TO_EMAIL
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+    with smtplib.SMTP("smtp.office365.com", 587) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
         smtp.login(GMAIL_USER, GMAIL_APP_PASS)
         smtp.send_message(msg)
 
