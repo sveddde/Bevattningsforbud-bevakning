@@ -35,29 +35,32 @@ def extract_hits_with_context(text):
 
 
 def check_url(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
+    }
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
-        }
-        r = requests.get(url, headers=headers, timeout=30)
+        r = requests.get(url, headers=headers, timeout=35)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        main = soup.find("main") or soup.find("article") or soup
-        text = main.get_text().lower()
+        # Sök efter vanliga nyhets/aktuellt-sektioner
+        sections = soup.find_all(["section", "div", "main", "article"])
+        relevant_text = ""
+        for s in sections:
+            id_class = (s.get("id") or "") + " " + " ".join(s.get("class", []))
+            if any(word in id_class.lower() for word in ["nyhet", "aktuellt", "news", "start", "senaste"]):
+                relevant_text += s.get_text().lower() + "\n"
 
-        hits = extract_hits_with_context(text)
+        # Om inget hittades, backa till main
+        if not relevant_text:
+            main = soup.find("main") or soup.find("article") or soup
+            relevant_text = main.get_text().lower()
 
-        # DEBUG
-        print(f"🔍 URL: {url}")
-        for keyword, context in hits:
-            print(f"  Keyword: {keyword}")
-            print(f"  Context: {context}")
-
+        hits = extract_hits_with_context(relevant_text)
         return hits
     except Exception as e:
-        print(f"⚠️ Fel vid kontroll av {url}: {e}")
+        print(f"Fel vid kontroll av {url}: {e}")
         return []
 
 def send_email(subject, body):
