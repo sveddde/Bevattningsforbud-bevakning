@@ -36,7 +36,7 @@ def extract_hits_with_context(text):
 
 def check_url(url):
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
 
         # Försök att bara ta med <main> eller artikeldelar först
