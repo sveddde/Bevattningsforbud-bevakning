@@ -41,7 +41,7 @@ def check_url(url):
                       "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
     }
     try:
-        r = requests.get(url, headers=headers, timeout=20)
+        r = requests.get(url, headers=headers, timeout=35)
         soup = BeautifulSoup(r.text, "html.parser")
 
         main = soup.find("main") or soup.find("article") or soup
