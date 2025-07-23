@@ -41,11 +41,7 @@ def check_url(url):
         soup = BeautifulSoup(r.text, "html.parser")
 
         # Prioritera nyhets-/aktuellt-sektioner
-        main = (soup.find("main") or
-                soup.find("article") or
-                soup.find("section", class_="news") or
-                soup.find("div", class_="news") or
-                soup)
+        main = (soup.find("main") )
 
         text = main.get_text(separator=" ").lower()
 
