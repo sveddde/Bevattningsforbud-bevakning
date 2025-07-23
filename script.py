@@ -44,10 +44,20 @@ def check_url(url):
         text = main.get_text().lower()
 
         hits = extract_hits_with_context(text)
+
+        if hits:
+            print(f"Hits för URL {url}:")
+            for kw, ctx in hits:
+                print(f"  Keyword: {kw}")
+                print(f"  Context: {ctx}")
+        else:
+            print(f"Inga träffar för URL {url}")
+
         return hits
     except Exception as e:
         print(f"Fel vid kontroll av {url}: {e}")
         return []
+
 
 
 def send_email(subject, body):
