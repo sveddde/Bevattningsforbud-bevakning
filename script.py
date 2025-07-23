@@ -35,36 +35,30 @@ def extract_hits_with_context(text):
 
 
 def check_url(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
-    }
     try:
-        r = requests.get(url, headers=headers, timeout=35)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
+        }
+        r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Prioritera nyhets-/aktuellt-sektioner
-        main = (soup.find("main") )
+        main = soup.find("main") or soup.find("article") or soup
+        text = main.get_text().lower()
 
-        text = main.get_text(separator=" ").lower()
+        hits = extract_hits_with_context(text)
 
-       hits = extract_hits_with_context(text)
-
-        print(f"DEBUG: Hits för URL {url}: {len(hits)} träff(ar)")
+        # DEBUG
+        print(f"🔍 URL: {url}")
         for keyword, context in hits:
             print(f"  Keyword: {keyword}")
             print(f"  Context: {context}")
 
-        # Om inga träffar, skriv ut början av texten för felsökning
-        if not hits:
-            print(f"DEBUG: Ingen träff i texten (början av texten): {text[:300]}...")
-
         return hits
     except Exception as e:
-        print(f"Fel vid kontroll av {url}: {e}")
+        print(f"⚠️ Fel vid kontroll av {url}: {e}")
         return []
-
 
 def send_email(subject, body):
     msg = MIMEText(body, "html")
@@ -83,21 +77,20 @@ def main():
         for row in reader:
             kommun = row["kommun"]
             url = row["webbplats"]
+            print(f"▶️ Kontrollerar: {kommun} - {url}")
             hits = check_url(url)
             if hits:
-    print(f"DEBUG: Hits for {kommun}:")
-    for keyword, context in hits:
-        print(f"  Keyword: '{keyword}'")
-        print(f"  Context: '{context}'")
-    summary = "<ul>"
-    for _, context in hits:
-        safe_context = context.replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
-        summary += f"<li>...{safe_context}...</li>"
-    summary += "</ul>"
-
-    alerts.append(
-        f"<b>{kommun}</b>: <a href='{url}'>{url}</a>{summary}<br>"
-    )
+                summary = "<br>".join(
+                    f"...{context.replace('\n', ' ').replace('\r', '').strip()}..." for _, context in hits
+                )
+                alert_text = (
+                    f"<b>{kommun}</b>: <a href='{url}'>{url}</a><br>"
+                    f"<i>{summary}</i>"
+                )
+                print(f"✅ Träff i {kommun}:\n{summary}")
+                alerts.append(alert_text)
+            else:
+                print(f"❌ Inga träffar i {kommun}.")
 
     if alerts:
         body = "<br><br>".join(alerts)
@@ -105,12 +98,9 @@ def main():
             f"Bevattningsförbud upptäckt {datetime.today().date()}",
             body
         )
+        print("📧 E-post skickad.")
     else:
-        # Skicka debugmail om inga träffar alls hittades (kan tas bort senare)
-        send_email(
-            f"Bevattningsförbud BEVAKNING - inga träffar {datetime.today().date()}",
-            "Ingen bevattningsförbuds-text hittades på någon kommunwebbplats idag."
-        )
+        print("ℹ️ Inga bevattningsförbud hittades.")
 
 
 if __name__ == "__main__":
