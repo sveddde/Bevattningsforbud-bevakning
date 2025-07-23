@@ -79,9 +79,7 @@ def main():
             url = row["webbplats"]
             hits = check_url(url)
             if hits:
-                summary = "<br>".join(
-                    f"...{context}..." for _, context in hits
-                )
+                summary = "<br>".join(f"...{context.replace('\n', ' ')}..." for _, context in hits)
                 alerts.append(
                     f"<b>{kommun}</b>: <a href='{url}'>{url}</a><br><i>{summary}</i>"
                 )
