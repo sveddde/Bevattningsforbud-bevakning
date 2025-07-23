@@ -53,7 +53,7 @@ def check_url(url):
 
         text = main.get_text(separator=" ").lower()
 
-        hits = extract_hits_with_context(text)
+       hits = extract_hits_with_context(text)
 
         print(f"DEBUG: Hits för URL {url}: {len(hits)} träff(ar)")
         for keyword, context in hits:
@@ -89,7 +89,10 @@ def main():
             url = row["webbplats"]
             hits = check_url(url)
             if hits:
-    # Skapa HTML-lista med kontext för varje träff (ordentligt escapad)
+    print(f"DEBUG: Hits for {kommun}:")
+    for keyword, context in hits:
+        print(f"  Keyword: '{keyword}'")
+        print(f"  Context: '{context}'")
     summary = "<ul>"
     for _, context in hits:
         safe_context = context.replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
