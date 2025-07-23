@@ -44,20 +44,30 @@ def check_url(url):
         r = requests.get(url, headers=headers, timeout=35)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        main = soup.find("main") or soup.find("article") or soup
-        text = main.get_text().lower()
+        # Prioritera nyhets-/aktuellt-sektioner
+        main = (soup.find("main") or
+                soup.find("article") or
+                soup.find("section", class_="news") or
+                soup.find("div", class_="news") or
+                soup)
+
+        text = main.get_text(separator=" ").lower()
 
         hits = extract_hits_with_context(text)
-        print(f"Hits för URL {url}:")
+
+        print(f"DEBUG: Hits för URL {url}: {len(hits)} träff(ar)")
         for keyword, context in hits:
             print(f"  Keyword: {keyword}")
             print(f"  Context: {context}")
+
+        # Om inga träffar, skriv ut början av texten för felsökning
+        if not hits:
+            print(f"DEBUG: Ingen träff i texten (början av texten): {text[:300]}...")
+
         return hits
     except Exception as e:
         print(f"Fel vid kontroll av {url}: {e}")
         return []
-
-
 
 
 def send_email(subject, body):
@@ -89,6 +99,12 @@ def main():
         send_email(
             f"Bevattningsförbud upptäckt {datetime.today().date()}",
             body
+        )
+    else:
+        # Skicka debugmail om inga träffar alls hittades (kan tas bort senare)
+        send_email(
+            f"Bevattningsförbud BEVAKNING - inga träffar {datetime.today().date()}",
+            "Ingen bevattningsförbuds-text hittades på någon kommunwebbplats idag."
         )
 
 
