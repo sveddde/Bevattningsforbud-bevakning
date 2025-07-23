@@ -89,10 +89,16 @@ def main():
             url = row["webbplats"]
             hits = check_url(url)
             if hits:
-                summary = "<br>".join(f"...{context.replace('\n', ' ')}..." for _, context in hits)
-                alerts.append(
-                    f"<b>{kommun}</b>: <a href='{url}'>{url}</a><br><i>{summary}</i>"
-                )
+    # Skapa HTML-lista med kontext för varje träff (ordentligt escapad)
+    summary = "<ul>"
+    for _, context in hits:
+        safe_context = context.replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+        summary += f"<li>...{safe_context}...</li>"
+    summary += "</ul>"
+
+    alerts.append(
+        f"<b>{kommun}</b>: <a href='{url}'>{url}</a><br>{summary}"
+    )
 
     if alerts:
         body = "<br><br>".join(alerts)
