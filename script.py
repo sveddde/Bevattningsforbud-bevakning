@@ -30,8 +30,14 @@ def extract_hits_with_context(text):
             start = max(0, match.start() - CONTEXT_CHARS)
             end = min(len(text), match.end() + CONTEXT_CHARS)
             context = text[start:end].strip()
+
+            # Hoppa över om kontexten innehåller "inget bevattningsförbud"
+            if "inget bevattningsförbud" in context or "inga bevattningsförbud" in context:
+                continue
+
             results.append((keyword, context))
     return results
+
 
 
 def check_url(url):
@@ -75,6 +81,7 @@ def send_email(subject, body):
 
 def main():
     alerts = []
+    seen_kommuner = set()
     with open("kommuner.csv", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
