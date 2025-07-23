@@ -35,28 +35,28 @@ def extract_hits_with_context(text):
 
 
 def check_url(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
+    }
     try:
-        r = requests.get(url, timeout=20)
+        r = requests.get(url, headers=headers, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Försök att bara ta med <main> eller artikeldelar först
         main = soup.find("main") or soup.find("article") or soup
         text = main.get_text().lower()
 
         hits = extract_hits_with_context(text)
-
-        if hits:
-            print(f"Hits för URL {url}:")
-            for kw, ctx in hits:
-                print(f"  Keyword: {kw}")
-                print(f"  Context: {ctx}")
-        else:
-            print(f"Inga träffar för URL {url}")
-
+        print(f"Hits för URL {url}:")
+        for keyword, context in hits:
+            print(f"  Keyword: {keyword}")
+            print(f"  Context: {context}")
         return hits
     except Exception as e:
         print(f"Fel vid kontroll av {url}: {e}")
         return []
+
 
 
 
