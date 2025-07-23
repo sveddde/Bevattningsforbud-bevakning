@@ -1,0 +1,28 @@
+name: Daglig bevakning
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Körs dagligen kl 08:00 UTC (09:00 svensk tid)
+  workflow_dispatch:
+
+jobs:
+  check-water:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Klona repo
+        uses: actions/checkout@v3
+
+      - name: Installera Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Installera beroenden
+        run: pip install -r requirements.txt
+
+      - name: Kör bevattningsförbudsskript
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+        run: python script.py
