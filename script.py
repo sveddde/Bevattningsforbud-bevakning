@@ -13,7 +13,11 @@ GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
-    "bevattningsförbud"
+    "bevattningsförbud" or
+                soup.find("article") or
+                soup.find("section", class_="news") or
+                soup.find("div", class_="news") or
+                soup
 ]
 
 CONTEXT_CHARS = 100  # antal tecken före och efter nyckelord
@@ -92,7 +96,7 @@ def main():
     summary += "</ul>"
 
     alerts.append(
-        f"<b>{kommun}</b>: <a href='{url}'>{url}</a><br>{summary}"
+        f"<b>{kommun}</b>: <a href='{url}'>{url}</a>{summary}<br>"
     )
 
     if alerts:
