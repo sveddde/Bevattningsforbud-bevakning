@@ -21,38 +21,36 @@ def extract_hits_with_context(text):
     results = []
 
     for sentence in sentences:
-        sentence = sentence.strip().lower()
-        if any(bad in sentence for bad in ["publicerad", "uppdaterad", "kalkning", "senast ändrad"]):
+        sentence_clean = sentence.strip()
+        sentence_lower = sentence_clean.lower()
+        if any(bad in sentence_lower for bad in ["publicerad", "uppdaterad", "kalkning", "senast ändrad"]):
             continue
-        if "inget bevattningsförbud" in sentence or "inga bevattningsförbud" in sentence:
+        if "inget bevattningsförbud" in sentence_lower or "inga bevattningsförbud" in sentence_lower:
             continue
-        if any(keyword in sentence for keyword in KEYWORDS):
-            results.append(("bevattningsförbud", sentence))
+        if any(keyword in sentence_lower for keyword in KEYWORDS):
+            results.append(("bevattningsförbud", sentence_clean))
     return results
 
-def extract_date(context):
-    context = context.lower()
-    
-    # Första försöket - exakt match för "från och med" följt av datum
+def extract_date(text):
+    text = text.lower()
+
     pattern1 = re.compile(
         r"från och med (\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
     )
-    match = pattern1.search(context)
+    match = pattern1.search(text)
     if match:
         return f"{match.group(1)} {match.group(2).lower()}"
 
-    # Andra försöket - generellt datum-mönster
     pattern2 = re.compile(
         r"(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
     )
-    match = pattern2.search(context)
+    match = pattern2.search(text)
     if match:
         return f"{match.group(1)} {match.group(2).lower()}"
 
-    # Tredje försöket - ISO-datum
-    match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", context)
+    match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text)
     if match_iso:
         try:
             date = datetime.strptime(match_iso.group(0), "%Y-%m-%d")
@@ -61,6 +59,7 @@ def extract_date(context):
             pass
 
     return None
+
 def check_url(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -86,20 +85,20 @@ def check_url(url):
                         news_soup.find("main") or
                         news_soup
                     )
-                    text = news_block.get_text().lower()
+                    text = news_block.get_text()
                     hits = extract_hits_with_context(text)
-                    return hits, news_url
+                    return hits, text, news_url
                 except Exception:
                     continue
 
         main = soup.find("main") or soup
-        text = main.get_text().lower()
+        text = main.get_text()
         hits = extract_hits_with_context(text)
-        return hits, url
+        return hits, text, url
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
-        return [], url
+        return [], "", url
 
 def send_email(subject, body):
     msg = MIMEText(body, "html")
@@ -124,13 +123,16 @@ def main():
                 continue
             seen_kommuner.add(kommun)
 
-            hits, actual_url = check_url(url)
+            hits, full_text, actual_url = check_url(url)
             if hits:
                 date = None
                 for _, context in hits:
                     date = extract_date(context)
                     if date:
                         break
+
+                if not date:
+                    date = extract_date(full_text)
 
                 if date:
                     alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{actual_url}'>{actual_url}</a>"
