@@ -16,10 +16,6 @@ KEYWORDS = [
     "bevattningsförbud"
 ]
 
-CONTEXT_CHARS_BEFORE = 100
-CONTEXT_CHARS_AFTER = 50
-
-
 def extract_hits_with_context(text):
     sentences = re.split(r"(?<=[.!?])\s+", text)
     results = []
@@ -33,8 +29,6 @@ def extract_hits_with_context(text):
         if any(keyword in sentence for keyword in KEYWORDS):
             results.append(("bevattningsförbud", sentence))
     return results
-
-
 
 def extract_date(context):
     context = context.lower()
@@ -55,7 +49,6 @@ def extract_date(context):
             pass
 
     return None
-
 
 def check_url(url):
     headers = {
@@ -84,20 +77,18 @@ def check_url(url):
                     )
                     text = news_block.get_text().lower()
                     hits = extract_hits_with_context(text)
-                    return hits, text  # 🟢 Returnera också hela artikeltexten
+                    return hits, news_url
                 except Exception:
                     continue
 
         main = soup.find("main") or soup
         text = main.get_text().lower()
         hits = extract_hits_with_context(text)
-        return hits, text
+        return hits, url
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
-        return [], ""
-
-
+        return [], url
 
 def send_email(subject, body):
     msg = MIMEText(body, "html")
@@ -107,7 +98,6 @@ def send_email(subject, body):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(GMAIL_USER, GMAIL_APP_PASS)
         smtp.send_message(msg)
-
 
 def main():
     alerts = []
@@ -123,25 +113,20 @@ def main():
                 continue
             seen_kommuner.add(kommun)
 
-           hits, full_text = check_url(url)
-if hits:
-    date = None
-    for _, context in hits:
-        date = extract_date(context)
-        if date:
-            break
+            hits, actual_url = check_url(url)
+            if hits:
+                date = None
+                for _, context in hits:
+                    date = extract_date(context)
+                    if date:
+                        break
 
-    # 🟡 Om ingen datum hittas nära bevattningsförbud, testa hela texten
-    if not date:
-        date = extract_date(full_text)
+                if date:
+                    alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{actual_url}'>{actual_url}</a>"
+                else:
+                    alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{actual_url}'>{actual_url}</a>"
 
-    if date:
-        alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{url}'>{url}</a>"
-    else:
-        alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{url}'>{url}</a>"
-
-    alerts.append(alert_text)
-
+                alerts.append(alert_text)
 
     if alerts:
         body = "<br><br>".join(alerts)
@@ -149,7 +134,6 @@ if hits:
             f"Bevattningsförbud upptäckt {datetime.today().date()}",
             body
         )
-
 
 if __name__ == "__main__":
     main()
