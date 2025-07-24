@@ -13,15 +13,15 @@ GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = ["bevattningsförbud"]
-CONTEXT_CHARS = 30  # antal tecken före och efter nyckelord
-
+CONTEXT_CHARS_BEFORE = 100
+CONTEXT_CHARS_AFTER = 50
 
 def extract_hits_with_context(text):
     results = []
     for keyword in KEYWORDS:
         for match in re.finditer(keyword, text):
-            start = max(0, match.start() - CONTEXT_CHARS)
-            end = min(len(text), match.end() + CONTEXT_CHARS)
+            start = max(0, match.start() - CONTEXT_CHARS_BEFORE)
+            end = min(len(text), match.end() + CONTEXT_CHARS_AFTER)
             context = text[start:end].strip().lower()
 
             # Uteslut felaktig kontext
@@ -33,6 +33,13 @@ def extract_hits_with_context(text):
             results.append((keyword, context))
     return results
 
+# I den kod där du hämtar datum från context:
+date = extract_date(context)
+if not date:
+    # Nytt! Prova hela texten om datum inte hittades
+    date = extract_date(full_text)
+
+# full_text = hela nyhetstexten (inte bara context)
 
 def extract_date(context):
     context = context.lower()
