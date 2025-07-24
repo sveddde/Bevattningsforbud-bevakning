@@ -79,28 +79,53 @@ def send_email(subject, body):
         smtp.send_message(msg)
 
 
+import re
+from datetime import datetime
+
+def extract_date(context):
+    # Försök hitta ett datum i formen 21 juli eller 2025-07-21
+    match = re.search(r"\b(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)\b", context)
+    if match:
+        return f"{match.group(1)} {match.group(2)}"
+
+    match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", context)
+    if match_iso:
+        try:
+            date = datetime.strptime(match_iso.group(0), "%Y-%m-%d")
+            return date.strftime("%-d %B")  # t.ex. 21 juli
+        except:
+            pass
+    return None
+
 def main():
     alerts = []
     seen_kommuner = set()
+
     with open("kommuner.csv", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             kommun = row["kommun"]
             url = row["webbplats"]
-            print(f"▶️ Kontrollerar: {kommun} - {url}")
+
+            if kommun in seen_kommuner:
+                continue
+            seen_kommuner.add(kommun)
+
             hits = check_url(url)
             if hits:
-                summary = "<br>".join(
-                    f"...{context.replace('\n', ' ').replace('\r', '').strip()}..." for _, context in hits
-                )
-                alert_text = (
-                    f"<b>{kommun}</b>: <a href='{url}'>{url}</a><br>"
-                    f"<i>{summary}</i>"
-                )
-                print(f"✅ Träff i {kommun}:\n{summary}")
+                # Använd första datum vi hittar i någon av kontexterna
+                first_date = None
+                for _, context in hits:
+                    first_date = extract_date(context)
+                    if first_date:
+                        break
+
+                if first_date:
+                    alert_text = f"{kommun} har infört bevattningsförbud den {first_date}. Se länk för mer information: <a href='{url}'>{url}</a>"
+                else:
+                    alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{url}'>{url}</a>"
+
                 alerts.append(alert_text)
-            else:
-                print(f"❌ Inga träffar i {kommun}.")
 
     if alerts:
         body = "<br><br>".join(alerts)
@@ -108,10 +133,6 @@ def main():
             f"Bevattningsförbud upptäckt {datetime.today().date()}",
             body
         )
-        print("📧 E-post skickad.")
-    else:
-        print("ℹ️ Inga bevattningsförbud hittades.")
-
 
 if __name__ == "__main__":
     main()
