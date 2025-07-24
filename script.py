@@ -32,24 +32,35 @@ def extract_hits_with_context(text):
 
 def extract_date(context):
     context = context.lower()
-    pattern = re.compile(
-        r"(från och med|införs|gäller från och med|träder i kraft)?\s*(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
+    
+    # Första försöket - exakt match för "från och med" följt av datum
+    pattern1 = re.compile(
+        r"från och med (\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
     )
-    match = pattern.search(context)
+    match = pattern1.search(context)
     if match:
-        return f"{match.group(2)} {match.group(3).lower()}"
+        return f"{match.group(1)} {match.group(2).lower()}"
 
+    # Andra försöket - generellt datum-mönster
+    pattern2 = re.compile(
+        r"(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
+        re.IGNORECASE
+    )
+    match = pattern2.search(context)
+    if match:
+        return f"{match.group(1)} {match.group(2).lower()}"
+
+    # Tredje försöket - ISO-datum
     match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", context)
     if match_iso:
         try:
             date = datetime.strptime(match_iso.group(0), "%Y-%m-%d")
-            return date.strftime("%-d %B")
+            return date.strftime("%-d %B").lower()
         except:
             pass
 
     return None
-
 def check_url(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
