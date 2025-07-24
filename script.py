@@ -12,9 +12,13 @@ GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
-KEYWORDS = ["bevattningsförbud"]
+KEYWORDS = [
+    "bevattningsförbud"
+]
+
 CONTEXT_CHARS_BEFORE = 100
 CONTEXT_CHARS_AFTER = 50
+
 
 def extract_hits_with_context(text):
     results = []
@@ -24,7 +28,6 @@ def extract_hits_with_context(text):
             end = min(len(text), match.end() + CONTEXT_CHARS_AFTER)
             context = text[start:end].strip().lower()
 
-            # Uteslut felaktig kontext
             if any(bad in context for bad in ["publicerad", "uppdaterad", "kalkning", "senast ändrad"]):
                 continue
             if "inget bevattningsförbud" in context or "inga bevattningsförbud" in context:
@@ -33,18 +36,9 @@ def extract_hits_with_context(text):
             results.append((keyword, context))
     return results
 
-# I den kod där du hämtar datum från context:
-date = extract_date(context)
-if not date:
-    # Nytt! Prova hela texten om datum inte hittades
-    date = extract_date(full_text)
-
-# full_text = hela nyhetstexten (inte bara context)
 
 def extract_date(context):
     context = context.lower()
-
-    # Matcha meningsfulla fraser som innebär införandedatum
     pattern = re.compile(
         r"(från och med|införs|gäller från och med|träder i kraft)?\s*(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
@@ -53,7 +47,6 @@ def extract_date(context):
     if match:
         return f"{match.group(2)} {match.group(3).lower()}"
 
-    # Alternativt: ISO-format
     match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", context)
     if match_iso:
         try:
@@ -63,65 +56,7 @@ def extract_date(context):
             pass
 
     return None
-def find_relevant_news(url):
-    print(f"🔍 NU KOLLAR VI: {url}")
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-    r = requests.get(url, headers=headers, timeout=30)
-    soup = BeautifulSoup(r.text, "html.parser")
 
-    # Hitta alla länkar till bevattningsförbud
-    a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
-    news_candidates = []
-
-    for a in a_tags:
-        href = a.get("href")
-        if href:
-            news_url = href if href.startswith("http") else url.rstrip("/") + href
-            try:
-                r_news = requests.get(news_url, headers=headers, timeout=30)
-                news_soup = BeautifulSoup(r_news.text, "html.parser")
-                news_block = (
-                    news_soup.find("article") or
-                    news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
-                    news_soup.find("main") or
-                    news_soup
-                )
-                text = news_block.get_text().lower()
-                print(f"🔗 Länk: {news_url}")
-                print(f"📰 Text (början): {text[:200]}")
-                date_str = extract_date(text)
-                print(f"📅 Datum extraherat: {date_str}")
-                
-                date_str = extract_date(text)
-                if date_str:
-                    try:
-                        date_obj = datetime.strptime(date_str, "%d %B")
-                        date_obj = date_obj.replace(year=datetime.now().year)
-                        news_candidates.append((date_obj, news_url, text))
-                    except Exception:
-                        pass
-            except Exception:
-                continue
-
-    today = datetime.now()
-    valid_candidates = [c for c in news_candidates if c[0] >= today]
-    if valid_candidates:
-        relevant = min(valid_candidates, key=lambda x: x[0])
-    elif news_candidates:
-        relevant = max(news_candidates, key=lambda x: x[0])
-    else:
-        relevant = None
-print("Alla nyheter och datum som hittades:")
-for d, l, t in news_candidates:
-    print(f"- {l}: {d.strftime('%d %B')}")
-if relevant:
-    print(f"👉 Scriptet väljer: {relevant[1]} med datum {relevant[0].strftime('%d %B')}")
-else:
-    print("❌ Scriptet hittar ingen relevant nyhet.")
-    return relevant  # tuple: (date_obj, news_url, text)
-    
 
 def check_url(url):
     headers = {
@@ -130,48 +65,40 @@ def check_url(url):
                       "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
     }
     try:
-        # Steg 1: Hämta startsidan
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Steg 2: Leta efter länk till "bevattningsförbud"
         a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
-        news_url = None
+
         for a in a_tags:
             href = a.get("href")
             if href:
-                if href.startswith("http"):
-                    news_url = href
-                else:
-                    news_url = url.rstrip("/") + href
-                break  # Ta första träffen
+                news_url = href if href.startswith("http") else url.rstrip("/") + href
+                try:
+                    r_news = requests.get(news_url, headers=headers, timeout=30)
+                    news_soup = BeautifulSoup(r_news.text, "html.parser")
+                    news_block = (
+                        news_soup.find("article") or
+                        news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
+                        news_soup.find("main") or
+                        news_soup
+                    )
+                    text = news_block.get_text().lower()
+                    hits = extract_hits_with_context(text)
+                    return hits
+                except Exception:
+                    continue
 
-        # Steg 3: Hämta nyhetssidan (rätt artikel)
-        if news_url:
-            print(f"🔗 Följer nyhetslänk: {news_url}")
-            r = requests.get(news_url, headers=headers, timeout=30)
-            soup = BeautifulSoup(r.text, "html.parser")
-
-            # Försök plocka bara innehållet i själva nyheten
-            # Exempelvis från en <article> eller ett nyhetsblock
-            news_block = (
-                soup.find("article") or
-                soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
-                soup.find("main") or
-                soup
-            )
-        else:
-            news_block = soup.find("main") or soup
-
-        text = news_block.get_text().lower()
+        # Om ingen länk fanns, analysera startsidan
+        main = soup.find("main") or soup
+        text = main.get_text().lower()
         hits = extract_hits_with_context(text)
-
-        print(f"🎯 Hittade {len(hits)} träff(ar) på bevattningsförbud i rätt artikel.")
         return hits
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
         return []
+
 
 def send_email(subject, body):
     msg = MIMEText(body, "html")
@@ -184,32 +111,40 @@ def send_email(subject, body):
 
 
 def main():
-    with open("kommuner.csv", encoding="utf-8") as f:
+    alerts = []
+    seen_kommuner = set()
+
+    with open("kommuner.csv", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            kommun_namn = row.get("kommun") or row.get("namn") or "Kommun"
-            kommun_url = row.get("url")
-            if not kommun_url:
-                continue
+            kommun = row["kommun"]
+            url = row["webbplats"]
 
-            print(f"🔎 Kollar {kommun_namn}: {kommun_url}")
-            result = find_relevant_news(kommun_url)
-            if result:
-                date_obj, news_url, news_text = result
-                body = (
-                    f"<b>{kommun_namn}:</b><br>"
-                    f"Bevattningsförbud gäller från: {date_obj.strftime('%d %B')}.<br>"
-                    f"Läs mer: <a href='{news_url}'>{news_url}</a>"
-                )
-                send_email(
-                    f"Bevattningsförbud - {kommun_namn}",
-                    body
-                )
-            else:
-                send_email(
-                    f"Bevattningsförbud - {kommun_namn}",
-                    f"Ingen relevant nyhet hittades för {kommun_namn}."
-                )
+            if kommun in seen_kommuner:
+                continue
+            seen_kommuner.add(kommun)
+
+            hits = check_url(url)
+            if hits:
+                date = None
+                for _, context in hits:
+                    date = extract_date(context)
+                    if date:
+                        break
+
+                if date:
+                    alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{url}'>{url}</a>"
+                else:
+                    alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{url}'>{url}</a>"
+
+                alerts.append(alert_text)
+
+    if alerts:
+        body = "<br><br>".join(alerts)
+        send_email(
+            f"Bevattningsförbud upptäckt {datetime.today().date()}",
+            body
+        )
 
 
 if __name__ == "__main__":
