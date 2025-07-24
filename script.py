@@ -13,7 +13,7 @@ GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = ["bevattningsförbud"]
-CONTEXT_CHARS = 50  # antal tecken före och efter nyckelord
+CONTEXT_CHARS = 30  # antal tecken före och efter nyckelord
 
 
 def extract_hits_with_context(text):
@@ -69,7 +69,7 @@ def check_url(url):
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Steg 2: Leta efter <a>-taggar med ordet "bevattningsförbud"
+        # Steg 2: Leta efter länk till "bevattningsförbud"
         a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
         news_url = None
         for a in a_tags:
@@ -79,25 +79,34 @@ def check_url(url):
                     news_url = href
                 else:
                     news_url = url.rstrip("/") + href
-                break  # Vi tar första träffen
+                break  # Ta första träffen
 
+        # Steg 3: Hämta nyhetssidan (rätt artikel)
         if news_url:
             print(f"🔗 Följer nyhetslänk: {news_url}")
             r = requests.get(news_url, headers=headers, timeout=30)
             soup = BeautifulSoup(r.text, "html.parser")
 
-        # Steg 3: Extrahera bara text från nyhetssidan
-        main = soup.find("main") or soup.find("article") or soup
-        text = main.get_text().lower()
+            # Försök plocka bara innehållet i själva nyheten
+            # Exempelvis från en <article> eller ett nyhetsblock
+            news_block = (
+                soup.find("article") or
+                soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
+                soup.find("main") or
+                soup
+            )
+        else:
+            news_block = soup.find("main") or soup
 
+        text = news_block.get_text().lower()
         hits = extract_hits_with_context(text)
+
         print(f"🎯 Hittade {len(hits)} träff(ar) på bevattningsförbud i rätt artikel.")
         return hits
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
         return []
-
 
 def send_email(subject, body):
     msg = MIMEText(body, "html")
