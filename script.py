@@ -47,29 +47,33 @@ def check_url(url):
                       "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
     }
     try:
+        # 1) Hämta startsidan
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Hitta specifik "Bevattningsförbud"-nyhet om den finns
-        a_tag = soup.find("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
-        if a_tag and a_tag.get("href"):
-            nyhet_url = a_tag["href"]
-            if nyhet_url.startswith("/"):
-                nyhet_url = url.rstrip("/") + nyhet_url
-            print(f"⏩ Följer länk till nyhet: {nyhet_url}")
-            r = requests.get(nyhet_url, headers=headers, timeout=30)
-            soup = BeautifulSoup(r.text, "html.parser")
+        # 2) Leta efter länkar med ordet bevattningsförbud
+        a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
+        for a in a_tags:
+            href = a.get("href")
+            if href:
+                nyhet_url = href if href.startswith("http") else url.rstrip("/") + href
+                print(f"⏩ Följer nyhetslänk: {nyhet_url}")
+                r = requests.get(nyhet_url, headers=headers, timeout=30)
+                soup = BeautifulSoup(r.text, "html.parser")
+                break  # Vi följer första relevanta länk
 
-        # Ta sedan text från hela sidan (eller nyhetssidan)
+        # 3) Extrahera text från nyhetssidan
         main = soup.find("main") or soup.find("article") or soup
         text = main.get_text().lower()
 
         hits = extract_hits_with_context(text)
+        print(f"DEBUG: Hittade {len(hits)} träff(ar) efter att följa nyhetslänk.")
         return hits
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
         return []
+
 
 
 def send_email(subject, body):
