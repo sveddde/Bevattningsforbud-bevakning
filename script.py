@@ -63,7 +63,53 @@ def extract_date(context):
             pass
 
     return None
+def find_relevant_news(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    r = requests.get(url, headers=headers, timeout=30)
+    soup = BeautifulSoup(r.text, "html.parser")
 
+    # Hitta alla länkar till bevattningsförbud
+    a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
+    news_candidates = []
+
+    for a in a_tags:
+        href = a.get("href")
+        if href:
+            news_url = href if href.startswith("http") else url.rstrip("/") + href
+            try:
+                r_news = requests.get(news_url, headers=headers, timeout=30)
+                news_soup = BeautifulSoup(r_news.text, "html.parser")
+                news_block = (
+                    news_soup.find("article") or
+                    news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
+                    news_soup.find("main") or
+                    news_soup
+                )
+                text = news_block.get_text().lower()
+                date_str = extract_date(text)
+                if date_str:
+                    try:
+                        date_obj = datetime.strptime(date_str, "%d %B")
+                        date_obj = date_obj.replace(year=datetime.now().year)
+                        news_candidates.append((date_obj, news_url, text))
+                    except Exception:
+                        pass
+            except Exception:
+                continue
+
+    today = datetime.now()
+    valid_candidates = [c for c in news_candidates if c[0] >= today]
+    if valid_candidates:
+        relevant = min(valid_candidates, key=lambda x: x[0])
+    elif news_candidates:
+        relevant = max(news_candidates, key=lambda x: x[0])
+    else:
+        relevant = None
+
+    return relevant  # tuple: (date_obj, news_url, text)
+    
 
 def check_url(url):
     headers = {
@@ -126,7 +172,32 @@ def send_email(subject, body):
 
 
 def main():
-    alert
+    with open("kommuner.csv", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            kommun_namn = row.get("kommun") or row.get("namn") or "Kommun"
+            kommun_url = row.get("url")
+            if not kommun_url:
+                continue
+
+            print(f"🔎 Kollar {kommun_namn}: {kommun_url}")
+            result = find_relevant_news(kommun_url)
+            if result:
+                date_obj, news_url, news_text = result
+                body = (
+                    f"<b>{kommun_namn}:</b><br>"
+                    f"Bevattningsförbud gäller från: {date_obj.strftime('%d %B')}.<br>"
+                    f"Läs mer: <a href='{news_url}'>{news_url}</a>"
+                )
+                send_email(
+                    f"Bevattningsförbud - {kommun_namn}",
+                    body
+                )
+            else:
+                send_email(
+                    f"Bevattningsförbud - {kommun_namn}",
+                    f"Ingen relevant nyhet hittades för {kommun_namn}."
+                )
 
 
 if __name__ == "__main__":
