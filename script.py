@@ -82,20 +82,28 @@ def send_email(subject, body):
 import re
 from datetime import datetime
 
-def extract_date(context):
-    # Försök hitta ett datum i formen 21 juli eller 2025-07-21
-    match = re.search(r"\b(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)\b", context)
-    if match:
-        return f"{match.group(1)} {match.group(2)}"
+def extract_dates(context):
+    matches = re.findall(r"\b(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)\b", context)
+    iso_matches = re.findall(r"\b(20\d{2})-(\d{2})-(\d{2})\b", context)
 
-    match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", context)
-    if match_iso:
+    dates = []
+    for day, month in matches:
         try:
-            date = datetime.strptime(match_iso.group(0), "%Y-%m-%d")
-            return date.strftime("%-d %B")  # t.ex. 21 juli
+            date = datetime.strptime(f"{day} {month}", "%d %B")
+            date = date.replace(year=datetime.today().year)
+            dates.append(date)
         except:
-            pass
-    return None
+            continue
+
+    for year, month, day in iso_matches:
+        try:
+            date = datetime.strptime(f"{year}-{month}-{day}", "%Y-%m-%d")
+            dates.append(date)
+        except:
+            continue
+
+    return dates
+
 
 def main():
     alerts = []
@@ -114,14 +122,15 @@ def main():
             hits = check_url(url)
             if hits:
                 # Använd första datum vi hittar i någon av kontexterna
-                first_date = None
+                             all_dates = []
                 for _, context in hits:
-                    first_date = extract_date(context)
-                    if first_date:
-                        break
+                    all_dates.extend(extract_dates(context))
 
-                if first_date:
-                    alert_text = f"{kommun} har infört bevattningsförbud den {first_date}. Se länk för mer information: <a href='{url}'>{url}</a>"
+                if all_dates:
+                    earliest = min(all_dates)
+                    datum_text = earliest.strftime("%-d %B")
+                    alert_text = f"{kommun} har infört bevattningsförbud den {datum_text}. Se länk för mer information: <a href='{url}'>{url}</a>"
+
                 else:
                     alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{url}'>{url}</a>"
 
