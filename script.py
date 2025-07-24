@@ -64,6 +64,7 @@ def extract_date(context):
 
     return None
 def find_relevant_news(url):
+    print(f"🔍 NU KOLLAR VI: {url}")
     headers = {
         "User-Agent": "Mozilla/5.0"
     }
@@ -88,6 +89,11 @@ def find_relevant_news(url):
                     news_soup
                 )
                 text = news_block.get_text().lower()
+                print(f"🔗 Länk: {news_url}")
+                print(f"📰 Text (början): {text[:200]}")
+                date_str = extract_date(text)
+                print(f"📅 Datum extraherat: {date_str}")
+                
                 date_str = extract_date(text)
                 if date_str:
                     try:
@@ -107,7 +113,13 @@ def find_relevant_news(url):
         relevant = max(news_candidates, key=lambda x: x[0])
     else:
         relevant = None
-
+print("Alla nyheter och datum som hittades:")
+for d, l, t in news_candidates:
+    print(f"- {l}: {d.strftime('%d %B')}")
+if relevant:
+    print(f"👉 Scriptet väljer: {relevant[1]} med datum {relevant[0].strftime('%d %B')}")
+else:
+    print("❌ Scriptet hittar ingen relevant nyhet.")
     return relevant  # tuple: (date_obj, news_url, text)
     
 
