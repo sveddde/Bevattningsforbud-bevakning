@@ -47,27 +47,30 @@ def check_url(url):
                       "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
     }
     try:
-        r = requests.get(url, headers=headers, timeout=35)
+        r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Sök efter vanliga nyhets/aktuellt-sektioner
-        sections = soup.find_all(["section", "div", "main", "article"])
-        relevant_text = ""
-        for s in sections:
-            id_class = (s.get("id") or "") + " " + " ".join(s.get("class", []))
-            if any(word in id_class.lower() for word in ["nyhet", "aktuellt", "news", "start", "senaste"]):
-                relevant_text += s.get_text().lower() + "\n"
+        # Hitta specifik "Bevattningsförbud"-nyhet om den finns
+        a_tag = soup.find("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
+        if a_tag and a_tag.get("href"):
+            nyhet_url = a_tag["href"]
+            if nyhet_url.startswith("/"):
+                nyhet_url = url.rstrip("/") + nyhet_url
+            print(f"⏩ Följer länk till nyhet: {nyhet_url}")
+            r = requests.get(nyhet_url, headers=headers, timeout=30)
+            soup = BeautifulSoup(r.text, "html.parser")
 
-        # Om inget hittades, backa till main
-        if not relevant_text:
-            main = soup.find("main") or soup.find("article") or soup
-            relevant_text = main.get_text().lower()
+        # Ta sedan text från hela sidan (eller nyhetssidan)
+        main = soup.find("main") or soup.find("article") or soup
+        text = main.get_text().lower()
 
-        hits = extract_hits_with_context(relevant_text)
+        hits = extract_hits_with_context(text)
         return hits
+
     except Exception as e:
-        print(f"Fel vid kontroll av {url}: {e}")
+        print(f"⚠️ Fel vid kontroll av {url}: {e}")
         return []
+
 
 def send_email(subject, body):
     msg = MIMEText(body, "html")
