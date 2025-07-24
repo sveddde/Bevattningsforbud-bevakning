@@ -21,17 +21,19 @@ CONTEXT_CHARS_AFTER = 50
 
 
 def extract_hits_with_context(text):
-    sentences = re.split(r"(?<=[.!?])\s+", text)  # dela upp i meningar
+    sentences = re.split(r"(?<=[.!?])\s+", text)
     results = []
 
     for sentence in sentences:
+        sentence = sentence.strip().lower()
         if any(bad in sentence for bad in ["publicerad", "uppdaterad", "kalkning", "senast ändrad"]):
             continue
         if "inget bevattningsförbud" in sentence or "inga bevattningsförbud" in sentence:
             continue
         if any(keyword in sentence for keyword in KEYWORDS):
-            results.append(("bevattningsförbud", sentence.strip()))
+            results.append(("bevattningsförbud", sentence))
     return results
+
 
 
 def extract_date(context):
@@ -122,12 +124,13 @@ def main():
             seen_kommuner.add(kommun)
 
             hits = check_url(url)
-            if hits:
-                date = None
-                for _, context in hits:
-                    date = extract_date(context)
-                    if date:
-                        break
+if hits:
+    date = None
+    for _, context in hits:
+        date = extract_date(context)
+        if date:
+            break
+
 
                 if date:
                     alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{url}'>{url}</a>"
