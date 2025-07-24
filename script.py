@@ -84,19 +84,19 @@ def check_url(url):
                     )
                     text = news_block.get_text().lower()
                     hits = extract_hits_with_context(text)
-                    return hits
+                    return hits, text  # 🟢 Returnera också hela artikeltexten
                 except Exception:
                     continue
 
-        # Om ingen länk fanns, analysera startsidan
         main = soup.find("main") or soup
         text = main.get_text().lower()
         hits = extract_hits_with_context(text)
-        return hits
+        return hits, text
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
-        return []
+        return [], ""
+
 
 
 def send_email(subject, body):
@@ -123,7 +123,7 @@ def main():
                 continue
             seen_kommuner.add(kommun)
 
-            hits = check_url(url)
+           hits, full_text = check_url(url)
 if hits:
     date = None
     for _, context in hits:
@@ -131,13 +131,17 @@ if hits:
         if date:
             break
 
+    # 🟡 Om ingen datum hittas nära bevattningsförbud, testa hela texten
+    if not date:
+        date = extract_date(full_text)
 
-                if date:
-                    alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{url}'>{url}</a>"
-                else:
-                    alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{url}'>{url}</a>"
+    if date:
+        alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{url}'>{url}</a>"
+    else:
+        alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{url}'>{url}</a>"
 
-                alerts.append(alert_text)
+    alerts.append(alert_text)
+
 
     if alerts:
         body = "<br><br>".join(alerts)
