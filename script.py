@@ -135,16 +135,15 @@ def main():
 
             hits = check_url(url)
             if hits:
-                # Använd första datum vi hittar i någon av kontexterna
-                             all_dates = []
+                # Försök extrahera datum från själva kontexten där nyckelordet hittades
+                date = None
                 for _, context in hits:
-                    all_dates.extend(extract_dates(context))
+                    date = extract_date(context)
+                    if date:
+                        break  # Första meningsfulla datum nära nyckelordet
 
-                if all_dates:
-                    earliest = min(all_dates)
-                    datum_text = earliest.strftime("%-d %B")
-                    alert_text = f"{kommun} har infört bevattningsförbud den {datum_text}. Se länk för mer information: <a href='{url}'>{url}</a>"
-
+                if date:
+                    alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{url}'>{url}</a>"
                 else:
                     alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{url}'>{url}</a>"
 
@@ -156,6 +155,7 @@ def main():
             f"Bevattningsförbud upptäckt {datetime.today().date()}",
             body
         )
+
 
 if __name__ == "__main__":
     main()
