@@ -20,7 +20,7 @@ KEYWORDS = [
                 soup
 ]
 
-CONTEXT_CHARS = 100  # antal tecken före och efter nyckelord
+CONTEXT_CHARS = 20  # antal tecken före och efter nyckelord
 
 
 def extract_hits_with_context(text):
