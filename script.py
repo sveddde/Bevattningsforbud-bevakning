@@ -47,32 +47,39 @@ def check_url(url):
                       "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
     }
     try:
-        # 1) Hämta startsidan
+        # Steg 1: Hämta startsidan
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # 2) Leta efter länkar med ordet bevattningsförbud
+        # Steg 2: Leta efter <a>-taggar med ordet "bevattningsförbud"
         a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
+        news_url = None
         for a in a_tags:
             href = a.get("href")
             if href:
-                nyhet_url = href if href.startswith("http") else url.rstrip("/") + href
-                print(f"⏩ Följer nyhetslänk: {nyhet_url}")
-                r = requests.get(nyhet_url, headers=headers, timeout=30)
-                soup = BeautifulSoup(r.text, "html.parser")
-                break  # Vi följer första relevanta länk
+                if href.startswith("http"):
+                    news_url = href
+                else:
+                    news_url = url.rstrip("/") + href
+                break  # Vi tar första träffen
 
-        # 3) Extrahera text från nyhetssidan
+        if news_url:
+            print(f"🔗 Följer nyhetslänk: {news_url}")
+            r = requests.get(news_url, headers=headers, timeout=30)
+            soup = BeautifulSoup(r.text, "html.parser")
+
+        # Steg 3: Extrahera bara text från nyhetssidan
         main = soup.find("main") or soup.find("article") or soup
         text = main.get_text().lower()
 
         hits = extract_hits_with_context(text)
-        print(f"DEBUG: Hittade {len(hits)} träff(ar) efter att följa nyhetslänk.")
+        print(f"🎯 Hittade {len(hits)} träff(ar) på bevattningsförbud i rätt artikel.")
         return hits
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
         return []
+
 
 
 
