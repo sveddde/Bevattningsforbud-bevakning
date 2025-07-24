@@ -23,20 +23,29 @@ KEYWORDS = [
 CONTEXT_CHARS = 20  # antal tecken före och efter nyckelord
 
 
-def extract_hits_with_context(text):
-    results = []
-    for keyword in KEYWORDS:
-        for match in re.finditer(keyword, text):
-            start = max(0, match.start() - CONTEXT_CHARS)
-            end = min(len(text), match.end() + CONTEXT_CHARS)
-            context = text[start:end].strip()
+def extract_date(context):
+    # Exkludera vanligt förekommande ord som inte är införandedatum
+    if any(neg in context for neg in ["publicerad", "uppdaterad", "senast ändrad"]):
+        return None
 
-            # Hoppa över om kontexten innehåller "inget bevattningsförbud"
-            if "inget bevattningsförbud" in context or "inga bevattningsförbud" in context:
-                continue
+    # Prioritera datum som föregås av specifika uttryck
+    pattern = re.compile(
+        r"(från och med|införs|gäller från och med)?\s*(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
+        re.IGNORECASE
+    )
+    match = pattern.search(context)
+    if match:
+        return f"{match.group(2)} {match.group(3).lower()}"
 
-            results.append((keyword, context))
-    return results
+    # Alternativt ISO-format
+    match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", context)
+    if match_iso:
+        try:
+            date = datetime.strptime(match_iso.group(0), "%Y-%m-%d")
+            return date.strftime("%-d %B")  # t.ex. 21 juli
+        except:
+            pass
+    return None
 
 
 
