@@ -21,19 +21,16 @@ CONTEXT_CHARS_AFTER = 50
 
 
 def extract_hits_with_context(text):
+    sentences = re.split(r"(?<=[.!?])\s+", text)  # dela upp i meningar
     results = []
-    for keyword in KEYWORDS:
-        for match in re.finditer(keyword, text):
-            start = max(0, match.start() - CONTEXT_CHARS_BEFORE)
-            end = min(len(text), match.end() + CONTEXT_CHARS_AFTER)
-            context = text[start:end].strip().lower()
 
-            if any(bad in context for bad in ["publicerad", "uppdaterad", "kalkning", "senast ändrad"]):
-                continue
-            if "inget bevattningsförbud" in context or "inga bevattningsförbud" in context:
-                continue
-
-            results.append((keyword, context))
+    for sentence in sentences:
+        if any(bad in sentence for bad in ["publicerad", "uppdaterad", "kalkning", "senast ändrad"]):
+            continue
+        if "inget bevattningsförbud" in sentence or "inga bevattningsförbud" in sentence:
+            continue
+        if any(keyword in sentence for keyword in KEYWORDS):
+            results.append(("bevattningsförbud", sentence.strip()))
     return results
 
 
