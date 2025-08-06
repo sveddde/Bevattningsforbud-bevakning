@@ -21,6 +21,7 @@ def extract_hits_with_context(text):
     sentences = re.split(r"(?<=[.!?])\s+", text)
 
     KEYWORDS = [
+        "bevattningsförbud",
         "införs bevattningsförbud",
         "bevattningsförbudet gäller tillsvidare",
         "bevattningsförbud införs",
