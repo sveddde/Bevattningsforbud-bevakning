@@ -33,47 +33,32 @@ NEGATIVE_PHRASES = [
     "hävs",
     "är inte längre aktuellt"
 ]
+SKIP_PHRASES = [
+    "publicerad", "uppdaterad", "kalkning", "senast ändrad"
+]
 
 def extract_hits_with_context(text):
-    # Dela upp text i meningar
-    sentences = re.split(r"(?<=[.!?])\s+", text)
-
-    KEYWORDS = [
-        "bevattningsförbud",
-        "införs bevattningsförbud",
-        "bevattningsförbudet gäller tillsvidare",
-        "bevattningsförbud införs",
-        "gäller bevattningsförbud",
-        "har infört bevattningsförbud",
-        "bevattningsförbud gäller"
-    ]
-    NEGATIVE_PHRASES = [
-        "inget bevattningsförbud",
-        "inga bevattningsförbud",
-        "upphävt bevattningsförbud",
-        "bevattningsförbudet upphävs",
-        "upphävts",
-        "upphävdes",
-        "har upphävts",
-        "har tagits bort",
-        "hävs",
-        "är inte längre aktuellt"
-    ]
-    SKIP_PHRASES = [
-        "publicerad", "uppdaterad", "kalkning", "senast ändrad"
-    ]
     results = []
-    for sentence in sentences:
-        sentence_clean = sentence.strip()
-        sentence_lower = sentence_clean.lower()
+    lines = text.split("\n")
 
-        # Filtrera bort ointressant eller vilseledande innehåll
-        if any(bad in sentence_lower for bad in SKIP_PHRASES + NEGATIVE_PHRASES):
+    for line in lines:
+        line_clean = line.strip()
+        line_lower = line_clean.lower()
+
+        if not line_clean:
             continue
 
-        # Leta efter minst ett av nyckelorden
-        if any(keyword in sentence_lower for keyword in KEYWORDS):
-            results.append(("bevattningsförbud", sentence_clean))
+        # Skippa irrelevanta rader
+        if any(bad in line_lower for bad in SKIP_PHRASES):
+            continue
+
+        # Skippa rader där både negativt och positivt nämns
+        if any(bad in line_lower for bad in NEGATIVE_PHRASES) and any(keyword in line_lower for keyword in KEYWORDS):
+            continue
+
+        # Matcha positiv fras utan negativ fras
+        if any(keyword in line_lower for keyword in KEYWORDS):
+            results.append(("bevattningsförbud", line_clean))
 
     return results
 
