@@ -13,9 +13,11 @@ TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
     "bevattningsförbud",
+    "Bevattningsförbud",
     "införs bevattningsförbud",
     "bevattningsförbudet gäller tillsvidare",
     "bevattningsförbud införs",
+    "Bevattningsförbud införs",
     "gäller bevattningsförbud",
     "har infört bevattningsförbud",
     "bevattningsförbud gäller"
