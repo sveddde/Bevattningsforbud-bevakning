@@ -38,6 +38,12 @@ SKIP_PHRASES = [
     "publicerad", "uppdaterad", "kalkning", "senast ändrad"
 ]
 
+# Kommuner med permanent bevattningsförbud som inte ska larma varje gång
+FIXED_FORBUD_KOMMUNER = ["tibro"]
+
+# Kommuner med nyligen upphävda förbud – tillfällig manuell blockering
+UPPHAVDA_KOMMUNER = ["tanum"]
+
 def extract_hits_with_context(text):
     results = []
     lines = text.split("\n")
@@ -49,22 +55,27 @@ def extract_hits_with_context(text):
         if not line_clean:
             continue
 
-        # Skippa irrelevanta rader som oftast är metadatatum, kalkning etc
         if any(phrase in line_lower for phrase in SKIP_PHRASES):
             continue
 
-        # Om både positiv och negativ fras förekommer i samma rad, skippa den (osäker info)
         if any(neg in line_lower for neg in NEGATIVE_PHRASES) and any(key in line_lower for key in KEYWORDS):
             continue
 
-        # Om rad innehåller positivt keyword och inte negativt
         if any(key in line_lower for key in KEYWORDS):
             results.append(("bevattningsförbud", line_clean))
 
     return results
 
+def has_negative_phrase_in_text(text):
+    text_lower = text.lower()
+    return any(phrase in text_lower for phrase in NEGATIVE_PHRASES)
+
 def extract_date(text):
     text = text.lower()
+
+    # Filtrera bort datum i rader med "publicerad", "uppdaterad", etc.
+    if any(skip in text for skip in SKIP_PHRASES):
+        return None
 
     # Matchar "från och med 22 juli"
     pattern1 = re.compile(
@@ -96,12 +107,7 @@ def extract_date(text):
     return None
 
 def is_fixed_forbud(kommun, text):
-    """
-    Specifik kontroll för kommuner med fasta bevattningsförbud som inte ska larma varje gång
-    T.ex. Tibro har ständigt förbud, vi kan se om texten innehåller info om "tillsvidare" eller liknande
-    """
-    if kommun.lower() == "tibro":
-        # Kolla om texten innehåller "tillsvidare" eller "ständigt"
+    if kommun.lower() in FIXED_FORBUD_KOMMUNER:
         if re.search(r"tillsvidare|ständigt|permanent|alltid", text.lower()):
             return True
     return False
@@ -112,11 +118,11 @@ def check_url(url, kommun):
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
                       "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
     }
+
     try:
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Försök hitta länkar till nyheter om bevattningsförbud
         a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
 
         for a in a_tags:
@@ -133,20 +139,20 @@ def check_url(url, kommun):
                         news_soup
                     )
                     text = news_block.get_text(separator="\n")
-                    hits = extract_hits_with_context(text)
-
-                    # Kontrollera om det är fast bevattningsförbud (för Tibro t.ex.)
-                    if is_fixed_forbud(kommun, text):
-                        # Om fast förbud, skippa om vi inte ser ny info (kan implementeras senare)
+                    if kommun.lower() in UPPHAVDA_KOMMUNER or has_negative_phrase_in_text(text) or is_fixed_forbud(kommun, text):
                         return [], text, news_url
 
+                    hits = extract_hits_with_context(text)
                     return hits, text, news_url
                 except Exception:
                     continue
 
-        # Om inga nyhetslänkar, fallback till startsidan
         main = soup.find("main") or soup
         text = main.get_text(separator="\n")
+
+        if kommun.lower() in UPPHAVDA_KOMMUNER or has_negative_phrase_in_text(text) or is_fixed_forbud(kommun, text):
+            return [], text, url
+
         hits = extract_hits_with_context(text)
         return hits, text, url
 
