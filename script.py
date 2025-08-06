@@ -20,7 +20,7 @@ KEYWORDS = [
         "gäller bevattningsförbud",
         "har infört bevattningsförbud",
         "bevattningsförbud gäller"
-    ]
+]
 NEGATIVE_PHRASES = [
         "inget bevattningsförbud",
         "inga bevattningsförbud",
@@ -32,7 +32,7 @@ NEGATIVE_PHRASES = [
         "har tagits bort",
         "hävs",
         "är inte längre aktuellt"
-    ]
+]
 
 def extract_hits_with_context(text):
     # Dela upp text i meningar
