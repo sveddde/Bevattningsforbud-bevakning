@@ -31,7 +31,10 @@ NEGATIVE_PHRASES = [
     "har upphävts",
     "har tagits bort",
     "hävs",
-    "är inte längre aktuellt"
+    "är inte längre aktuellt",
+    "förbudet har upphört",
+    "bevattningsförbudet har upphört",
+    "förbudet har avslutats"
 ]
 
 SKIP_PHRASES = [
@@ -39,6 +42,10 @@ SKIP_PHRASES = [
 ]
 
 FIXED_FORBUD_KOMMUNER = ["tibro"]
+
+BLOCKED_URL_PATTERNS = [
+    "upphavt", "upphört", "upphävt", "upphort", "avslutat", "slut"
+]
 
 def extract_hits_with_context(text):
     results = []
@@ -100,6 +107,10 @@ def is_fixed_forbud(kommun, text):
             return True
     return False
 
+def is_blocked_url(url):
+    url_lower = url.lower()
+    return any(pattern in url_lower for pattern in BLOCKED_URL_PATTERNS)
+
 def check_url(url, kommun):
     headers = {
         "User-Agent": "Mozilla/5.0"
@@ -109,18 +120,17 @@ def check_url(url, kommun):
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Nyhetssökning – hitta alla länkar som innehåller "bevattning"
         links = soup.find_all("a", href=True)
         relevant_links = []
 
         for a in links:
             href = a.get("href", "")
             text = a.get_text().lower()
-            if "bevattning" in href.lower() or "bevattning" in text:
+            if ("bevattning" in href.lower() or "bevattning" in text or "bevattningsförbud" in text):
                 full_url = href if href.startswith("http") else url.rstrip("/") + href
-                relevant_links.append(full_url)
+                if not is_blocked_url(full_url):
+                    relevant_links.append(full_url)
 
-        # Kontrollera varje relevant länk
         for news_url in relevant_links:
             try:
                 r_news = requests.get(news_url, headers=headers, timeout=30)
@@ -143,12 +153,8 @@ def check_url(url, kommun):
             except Exception:
                 continue
 
-        # Fallback till startsidan
         main = soup.find("main") or soup
         text = main.get_text(separator="\n")
-
-        print(f"[DEBUG fallback-text från {kommun}]")
-        print(text[:1500])  # Begränsa till 1500 tecken för läsbarhet
 
         if has_negative_phrase_in_text(text) or is_fixed_forbud(kommun, text):
             return [], text, url
