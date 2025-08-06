@@ -1,4 +1,3 @@
-# === script.py ===
 import csv
 import os
 import requests
@@ -48,15 +47,12 @@ def extract_hits_with_context(text):
         if not line_clean:
             continue
 
-        # Skippa irrelevanta rader
         if any(bad in line_lower for bad in SKIP_PHRASES):
             continue
 
-        # Skippa rader där både negativt och positivt nämns
         if any(bad in line_lower for bad in NEGATIVE_PHRASES) and any(keyword in line_lower for keyword in KEYWORDS):
             continue
 
-        # Matcha positiv fras utan negativ fras
         if any(keyword in line_lower for keyword in KEYWORDS):
             results.append(("bevattningsförbud", line_clean))
 
@@ -117,6 +113,12 @@ def check_url(url):
                         news_soup
                     )
                     text = news_block.get_text()
+
+                    # ❗ NY KONTROLL: filtrera bort upphävda förbud
+                    text_lower = text.lower()
+                    if any(neg in text_lower for neg in NEGATIVE_PHRASES):
+                        return [], text, news_url
+
                     hits = extract_hits_with_context(text)
                     return hits, text, news_url
                 except Exception:
@@ -124,6 +126,12 @@ def check_url(url):
 
         main = soup.find("main") or soup
         text = main.get_text()
+
+        # ❗ NY KONTROLL även här
+        text_lower = text.lower()
+        if any(neg in text_lower for neg in NEGATIVE_PHRASES):
+            return [], text, url
+
         hits = extract_hits_with_context(text)
         return hits, text, url
 
