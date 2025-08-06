@@ -21,7 +21,7 @@ KEYWORDS = [
         "har infört bevattningsförbud",
         "bevattningsförbud gäller"
     ]
-    NEGATIVE_PHRASES = [
+NEGATIVE_PHRASES = [
         "inget bevattningsförbud",
         "inga bevattningsförbud",
         "upphävt bevattningsförbud",
