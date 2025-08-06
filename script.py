@@ -97,8 +97,35 @@ def check_url(url):
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
+        # 🔍 NYHETSLÄNKAR först (för Orust)
+        nyhetslänkar = soup.find_all("a", href=re.compile(r"/nyheter/", re.IGNORECASE))
+        for a in nyhetslänkar:
+            href = a.get("href")
+            if href:
+                news_url = href if href.startswith("http") else url.rstrip("/") + href
+                try:
+                    r_news = requests.get(news_url, headers=headers, timeout=30)
+                    news_soup = BeautifulSoup(r_news.text, "html.parser")
+                    news_block = (
+                        news_soup.find("article") or
+                        news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
+                        news_soup.find("main") or
+                        news_soup
+                    )
+                    text = news_block.get_text()
 
+                    text_lower = text.lower()
+                    if any(neg in text_lower for neg in NEGATIVE_PHRASES):
+                        continue
+
+                    hits = extract_hits_with_context(text)
+                    if hits:
+                        return hits, text, news_url
+                except Exception:
+                    continue
+
+        # Vanlig sökning på startsidan
+        a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
         for a in a_tags:
             href = a.get("href")
             if href:
@@ -114,7 +141,6 @@ def check_url(url):
                     )
                     text = news_block.get_text()
 
-                    # ❗ NY KONTROLL: filtrera bort upphävda förbud
                     text_lower = text.lower()
                     if any(neg in text_lower for neg in NEGATIVE_PHRASES):
                         return [], text, news_url
@@ -127,7 +153,6 @@ def check_url(url):
         main = soup.find("main") or soup
         text = main.get_text()
 
-        # ❗ NY KONTROLL även här
         text_lower = text.lower()
         if any(neg in text_lower for neg in NEGATIVE_PHRASES):
             return [], text, url
