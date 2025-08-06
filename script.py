@@ -1,4 +1,3 @@
-# === script.py ===
 import csv
 import os
 import requests
@@ -21,6 +20,7 @@ KEYWORDS = [
     "har infört bevattningsförbud",
     "bevattningsförbud gäller"
 ]
+
 NEGATIVE_PHRASES = [
     "inget bevattningsförbud",
     "inga bevattningsförbud",
@@ -33,6 +33,7 @@ NEGATIVE_PHRASES = [
     "hävs",
     "är inte längre aktuellt"
 ]
+
 SKIP_PHRASES = [
     "publicerad", "uppdaterad", "kalkning", "senast ändrad"
 ]
@@ -48,16 +49,16 @@ def extract_hits_with_context(text):
         if not line_clean:
             continue
 
-        # Skippa irrelevanta rader
-        if any(bad in line_lower for bad in SKIP_PHRASES):
+        # Skippa irrelevanta rader som oftast är metadatatum, kalkning etc
+        if any(phrase in line_lower for phrase in SKIP_PHRASES):
             continue
 
-        # Skippa rader där både negativt och positivt nämns
-        if any(bad in line_lower for bad in NEGATIVE_PHRASES) and any(keyword in line_lower for keyword in KEYWORDS):
+        # Om både positiv och negativ fras förekommer i samma rad, skippa den (osäker info)
+        if any(neg in line_lower for neg in NEGATIVE_PHRASES) and any(key in line_lower for key in KEYWORDS):
             continue
 
-        # Matcha positiv fras utan negativ fras
-        if any(keyword in line_lower for keyword in KEYWORDS):
+        # Om rad innehåller positivt keyword och inte negativt
+        if any(key in line_lower for key in KEYWORDS):
             results.append(("bevattningsförbud", line_clean))
 
     return results
@@ -65,22 +66,25 @@ def extract_hits_with_context(text):
 def extract_date(text):
     text = text.lower()
 
+    # Matchar "från och med 22 juli"
     pattern1 = re.compile(
         r"från och med (\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
     )
     match = pattern1.search(text)
     if match:
-        return f"{match.group(1)} {match.group(2).lower()}"
+        return f"{int(match.group(1))} {match.group(2)}"
 
+    # Matchar datum utan "från och med", t.ex. "22 juli"
     pattern2 = re.compile(
         r"(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
     )
     match = pattern2.search(text)
     if match:
-        return f"{match.group(1)} {match.group(2).lower()}"
+        return f"{int(match.group(1))} {match.group(2)}"
 
+    # ISO-datum YYYY-MM-DD
     match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text)
     if match_iso:
         try:
@@ -91,7 +95,18 @@ def extract_date(text):
 
     return None
 
-def check_url(url):
+def is_fixed_forbud(kommun, text):
+    """
+    Specifik kontroll för kommuner med fasta bevattningsförbud som inte ska larma varje gång
+    T.ex. Tibro har ständigt förbud, vi kan se om texten innehåller info om "tillsvidare" eller liknande
+    """
+    if kommun.lower() == "tibro":
+        # Kolla om texten innehåller "tillsvidare" eller "ständigt"
+        if re.search(r"tillsvidare|ständigt|permanent|alltid", text.lower()):
+            return True
+    return False
+
+def check_url(url, kommun):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -101,6 +116,7 @@ def check_url(url):
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
+        # Försök hitta länkar till nyheter om bevattningsförbud
         a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
 
         for a in a_tags:
@@ -116,14 +132,21 @@ def check_url(url):
                         news_soup.find("main") or
                         news_soup
                     )
-                    text = news_block.get_text()
+                    text = news_block.get_text(separator="\n")
                     hits = extract_hits_with_context(text)
+
+                    # Kontrollera om det är fast bevattningsförbud (för Tibro t.ex.)
+                    if is_fixed_forbud(kommun, text):
+                        # Om fast förbud, skippa om vi inte ser ny info (kan implementeras senare)
+                        return [], text, news_url
+
                     return hits, text, news_url
                 except Exception:
                     continue
 
+        # Om inga nyhetslänkar, fallback till startsidan
         main = soup.find("main") or soup
-        text = main.get_text()
+        text = main.get_text(separator="\n")
         hits = extract_hits_with_context(text)
         return hits, text, url
 
@@ -154,7 +177,7 @@ def main():
                 continue
             seen_kommuner.add(kommun)
 
-            hits, full_text, actual_url = check_url(url)
+            hits, full_text, actual_url = check_url(url, kommun)
             if hits:
                 date = None
                 for _, context in hits:
