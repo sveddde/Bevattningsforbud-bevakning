@@ -13,6 +13,7 @@ GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
+    "bevattningsförbud",
     "införs bevattningsförbud",
     "bevattningsförbudet gäller tillsvidare",
     "bevattningsförbud införs",
