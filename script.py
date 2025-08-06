@@ -178,6 +178,9 @@ def check_url(url, kommun):
         return [], "", url
 
 def send_email(subject, body):
+    print("DEBUG: Skickar mail...")
+    print("Subject:", subject)
+    print("Body:\n", body)
     msg = MIMEText(body, "html")
     msg["Subject"] = subject
     msg["From"] = GMAIL_USER
@@ -214,6 +217,13 @@ def main():
                     alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{actual_url}'>{actual_url}</a>"
 
                 alerts.append(alert_text)
+
+    # Tillfälligt testlarm för att bekräfta att mail skickas
+    alerts.append("⚠️ TESTLARM: Detta är en testpost som alltid ska skicka mail.")
+
+    print("DEBUG: Totalt antal träffar:", len(alerts))
+    for a in alerts:
+        print("DEBUG ALERT:", a)
 
     if alerts:
         body = "<br><br>".join(alerts)
