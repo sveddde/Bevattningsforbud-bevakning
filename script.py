@@ -1,3 +1,4 @@
+# === script.py ===
 import csv
 import os
 import requests
@@ -47,12 +48,15 @@ def extract_hits_with_context(text):
         if not line_clean:
             continue
 
+        # Skippa irrelevanta rader
         if any(bad in line_lower for bad in SKIP_PHRASES):
             continue
 
+        # Skippa rader där både negativt och positivt nämns
         if any(bad in line_lower for bad in NEGATIVE_PHRASES) and any(keyword in line_lower for keyword in KEYWORDS):
             continue
 
+        # Matcha positiv fras utan negativ fras
         if any(keyword in line_lower for keyword in KEYWORDS):
             results.append(("bevattningsförbud", line_clean))
 
