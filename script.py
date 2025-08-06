@@ -35,14 +35,10 @@ NEGATIVE_PHRASES = [
 ]
 
 SKIP_PHRASES = [
-    "publicerad", "uppdaterad", "kalkning", "senast ändrad"
+    "kalkning"
 ]
 
-# Kommuner med permanent bevattningsförbud som inte ska larma varje gång
 FIXED_FORBUD_KOMMUNER = ["tibro"]
-
-# Kommuner med nyligen upphävda förbud – tillfällig manuell blockering
-UPPHAVDA_KOMMUNER = ["tanum"]
 
 def extract_hits_with_context(text):
     results = []
@@ -55,9 +51,6 @@ def extract_hits_with_context(text):
         if not line_clean:
             continue
 
-        if any(phrase in line_lower for phrase in SKIP_PHRASES):
-            continue
-
         if any(neg in line_lower for neg in NEGATIVE_PHRASES) and any(key in line_lower for key in KEYWORDS):
             continue
 
@@ -67,17 +60,12 @@ def extract_hits_with_context(text):
     return results
 
 def has_negative_phrase_in_text(text):
-    text_lower = text.lower()
-    return any(phrase in text_lower for phrase in NEGATIVE_PHRASES)
+    return any(phrase in text.lower() for phrase in NEGATIVE_PHRASES)
 
 def extract_date(text):
     text = text.lower()
 
-    # Filtrera bort datum i rader med "publicerad", "uppdaterad", etc.
-    if any(skip in text for skip in SKIP_PHRASES):
-        return None
-
-    # Matchar "från och med 22 juli"
+    # Matcha "från och med 22 juli"
     pattern1 = re.compile(
         r"från och med (\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
@@ -86,7 +74,7 @@ def extract_date(text):
     if match:
         return f"{int(match.group(1))} {match.group(2)}"
 
-    # Matchar datum utan "från och med", t.ex. "22 juli"
+    # Matcha "22 juli"
     pattern2 = re.compile(
         r"(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
@@ -95,7 +83,7 @@ def extract_date(text):
     if match:
         return f"{int(match.group(1))} {match.group(2)}"
 
-    # ISO-datum YYYY-MM-DD
+    # Matcha "2025-07-22"
     match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text)
     if match_iso:
         try:
@@ -114,43 +102,55 @@ def is_fixed_forbud(kommun, text):
 
 def check_url(url, kommun):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
+        "User-Agent": "Mozilla/5.0"
     }
 
     try:
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
+        # Nyhetssökning – hitta alla länkar som innehåller "bevattning"
+        links = soup.find_all("a", href=True)
+        relevant_links = []
 
-        for a in a_tags:
-            href = a.get("href")
-            if href:
-                news_url = href if href.startswith("http") else url.rstrip("/") + href
-                try:
-                    r_news = requests.get(news_url, headers=headers, timeout=30)
-                    news_soup = BeautifulSoup(r_news.text, "html.parser")
-                    news_block = (
-                        news_soup.find("article") or
-                        news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
-                        news_soup.find("main") or
-                        news_soup
-                    )
-                    text = news_block.get_text(separator="\n")
-                    if kommun.lower() in UPPHAVDA_KOMMUNER or has_negative_phrase_in_text(text) or is_fixed_forbud(kommun, text):
-                        return [], text, news_url
+        for a in links:
+            href = a.get("href", "")
+            text = a.get_text().lower()
+            if "bevattning" in href.lower() or "bevattning" in text:
+                full_url = href if href.startswith("http") else url.rstrip("/") + href
+                relevant_links.append(full_url)
 
-                    hits = extract_hits_with_context(text)
+        # Kontrollera varje relevant länk
+        for news_url in relevant_links:
+            try:
+                r_news = requests.get(news_url, headers=headers, timeout=30)
+                news_soup = BeautifulSoup(r_news.text, "html.parser")
+                news_block = (
+                    news_soup.find("article") or
+                    news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
+                    news_soup.find("main") or
+                    news_soup
+                )
+                text = news_block.get_text(separator="\n")
+
+                if has_negative_phrase_in_text(text) or is_fixed_forbud(kommun, text):
+                    return [], text, news_url
+
+                hits = extract_hits_with_context(text)
+                if hits:
                     return hits, text, news_url
-                except Exception:
-                    continue
 
+            except Exception:
+                continue
+
+        # Fallback till startsidan
         main = soup.find("main") or soup
         text = main.get_text(separator="\n")
 
-        if kommun.lower() in UPPHAVDA_KOMMUNER or has_negative_phrase_in_text(text) or is_fixed_forbud(kommun, text):
+        print(f"[DEBUG fallback-text från {kommun}]")
+        print(text[:1500])  # Begränsa till 1500 tecken för läsbarhet
+
+        if has_negative_phrase_in_text(text) or is_fixed_forbud(kommun, text):
             return [], text, url
 
         hits = extract_hits_with_context(text)
@@ -187,8 +187,9 @@ def main():
             if hits:
                 date = None
                 for _, context in hits:
-                    date = extract_date(context)
-                    if date:
+                    d = extract_date(context)
+                    if d:
+                        date = d
                         break
 
                 if not date:
