@@ -40,10 +40,6 @@ NEGATIVE_PHRASES = [
     "inte längre ett bevattningsförbud"
 ]
 
-DATE_PHRASE_TRIGGERS = [
-    "infört", "gäller från", "från och med", "träder i kraft"
-]
-
 BLOCKED_URL_PATTERNS = [
     "upphavt", "upphört", "upphävt", "upphort", "avslutat", "slut"
 ]
@@ -75,7 +71,6 @@ def has_negative_phrase_in_text(text):
 def extract_date(text):
     text = text.lower()
 
-    # Matcha "från och med 22 juli"
     pattern1 = re.compile(
         r"från och med (\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
@@ -84,7 +79,6 @@ def extract_date(text):
     if match:
         return f"{int(match.group(1))} {match.group(2)}"
 
-    # Matcha "22 juli"
     pattern2 = re.compile(
         r"(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
         re.IGNORECASE
@@ -93,7 +87,6 @@ def extract_date(text):
     if match:
         return f"{int(match.group(1))} {match.group(2)}"
 
-    # Matcha ISO-format "2025-07-22"
     match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text)
     if match_iso:
         try:
@@ -108,13 +101,9 @@ def is_recent_date(date_str):
     try:
         dt = datetime.strptime(date_str, "%d %B")
         dt = dt.replace(year=datetime.today().year)
-        return dt >= datetime.today() - timedelta(days=90)
+        return dt >= datetime.today() - timedelta(days=120)
     except:
         return False
-
-def context_has_date_trigger(context):
-    context_lower = context.lower()
-    return any(trigger in context_lower for trigger in DATE_PHRASE_TRIGGERS)
 
 def is_fixed_forbud(kommun, text):
     if kommun.lower() in FIXED_FORBUD_KOMMUNER:
@@ -162,17 +151,14 @@ def check_url(url, kommun):
                     return [], text, news_url
 
                 hits = extract_hits_with_context(text)
-
-                # NY FILTER: minst en giltig kontext med datum + trigger
                 for _, ctx in hits:
                     extracted = extract_date(ctx)
-                    if extracted and is_recent_date(extracted) and context_has_date_trigger(ctx):
+                    if extracted and is_recent_date(extracted):
                         return [(_, ctx)], text, news_url
 
             except Exception:
                 continue
 
-        # Fallback – startsidan
         main = soup.find("main") or soup
         text = main.get_text(separator="\n")
 
@@ -180,10 +166,9 @@ def check_url(url, kommun):
             return [], text, url
 
         hits = extract_hits_with_context(text)
-
         for _, ctx in hits:
             extracted = extract_date(ctx)
-            if extracted and is_recent_date(extracted) and context_has_date_trigger(ctx):
+            if extracted and is_recent_date(extracted):
                 return [(_, ctx)], text, url
 
         return [], text, url
