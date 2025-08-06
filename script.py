@@ -13,25 +13,25 @@ GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
-        "bevattningsförbud",
-        "införs bevattningsförbud",
-        "bevattningsförbudet gäller tillsvidare",
-        "bevattningsförbud införs",
-        "gäller bevattningsförbud",
-        "har infört bevattningsförbud",
-        "bevattningsförbud gäller"
+    "bevattningsförbud",
+    "införs bevattningsförbud",
+    "bevattningsförbudet gäller tillsvidare",
+    "bevattningsförbud införs",
+    "gäller bevattningsförbud",
+    "har infört bevattningsförbud",
+    "bevattningsförbud gäller"
 ]
 NEGATIVE_PHRASES = [
-        "inget bevattningsförbud",
-        "inga bevattningsförbud",
-        "upphävt bevattningsförbud",
-        "bevattningsförbudet upphävs",
-        "upphävts",
-        "upphävdes",
-        "har upphävts",
-        "har tagits bort",
-        "hävs",
-        "är inte längre aktuellt"
+    "inget bevattningsförbud",
+    "inga bevattningsförbud",
+    "upphävt bevattningsförbud",
+    "bevattningsförbudet upphävs",
+    "upphävts",
+    "upphävdes",
+    "har upphävts",
+    "har tagits bort",
+    "hävs",
+    "är inte längre aktuellt"
 ]
 
 def extract_hits_with_context(text):
