@@ -13,22 +13,49 @@ GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
-    "bevattningsförbud"
+    "införs bevattningsförbud", "bevattningsförbudet gäller tillsvidare"
 ]
 
 def extract_hits_with_context(text):
+    # Dela upp text i meningar
     sentences = re.split(r"(?<=[.!?])\s+", text)
-    results = []
 
+    KEYWORDS = [
+        "införs bevattningsförbud",
+        "bevattningsförbudet gäller tillsvidare",
+        "bevattningsförbud införs",
+        "gäller bevattningsförbud",
+        "har infört bevattningsförbud",
+        "bevattningsförbud gäller"
+    ]
+    NEGATIVE_PHRASES = [
+        "inget bevattningsförbud",
+        "inga bevattningsförbud",
+        "upphävt bevattningsförbud",
+        "bevattningsförbudet upphävs",
+        "upphävts",
+        "upphävdes",
+        "har upphävts",
+        "har tagits bort",
+        "hävs",
+        "är inte längre aktuellt"
+    ]
+    SKIP_PHRASES = [
+        "publicerad", "uppdaterad", "kalkning", "senast ändrad"
+    ]
+    results = []
     for sentence in sentences:
         sentence_clean = sentence.strip()
         sentence_lower = sentence_clean.lower()
-        if any(bad in sentence_lower for bad in ["publicerad", "uppdaterad", "kalkning", "senast ändrad"]):
+
+        # Filtrera bort ointressant eller vilseledande innehåll
+        if any(bad in sentence_lower for bad in SKIP_PHRASES + NEGATIVE_PHRASES):
             continue
-        if "inget bevattningsförbud" in sentence_lower or "inga bevattningsförbud" in sentence_lower:
-            continue
+
+        # Leta efter minst ett av nyckelorden
         if any(keyword in sentence_lower for keyword in KEYWORDS):
             results.append(("bevattningsförbud", sentence_clean))
+
     return results
 
 def extract_date(text):
