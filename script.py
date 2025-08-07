@@ -35,7 +35,7 @@ NEGATIVE_PHRASES = [
 
 # ---- Läs in kommunlistan ---- #
 kommun_df = pd.read_csv("kommuner.csv")
-kommun_urls = dict(zip(kommun_df["Kommun"], kommun_df["URL"]))
+kommun_urls = dict(zip(kommun_df["kommun"], kommun_df["webbplats"]))
 
 # ---- Caching + Parallell hämtning ---- #
 @lru_cache(maxsize=128)
@@ -64,11 +64,13 @@ def fetch_pages_parallel(urls, max_workers=50):
 # ---- Datumextraktion ---- #
 def extract_hits_with_context(text):
     matches = []
-    paragraphs = re.split(r"[\n\r]+", text)
-    for para in paragraphs:
-        if any(keyword in para for keyword in KEYWORDS):
-            if not any(neg in para for neg in NEGATIVE_PHRASES):
-                matches.append(para.strip())
+    for keyword in KEYWORDS:
+        for match in re.finditer(re.escape(keyword), text, re.IGNORECASE):
+            start = max(match.start() - 40, 0)
+            end = min(match.end() + 40, len(text))
+            context = text[start:end]
+            if not any(neg in context for neg in NEGATIVE_PHRASES):
+                matches.append(context)
     return matches
 
 def extract_date(text):
@@ -80,7 +82,7 @@ def extract_date(text):
 # ---- Mailfunktion ---- #
 def send_email(message_body):
     sender = os.getenv("GMAIL_USER")
-    receiver = os.getenv("TO_EMAIL")
+    receiver = os.getenv("GMAIL_RECEIVER")
     subject = "Bevattningsförbud upptäckt"
 
     msg = MIMEText(message_body)
