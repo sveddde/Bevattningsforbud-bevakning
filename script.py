@@ -6,6 +6,7 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
 import re
+from urllib.parse import urljoin
 
 GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
@@ -22,6 +23,7 @@ KEYWORDS = [
     "har infört bevattningsförbud",
     "bevattningsförbud gäller"
 ]
+
 NEGATIVE_PHRASES = [
     "inget bevattningsförbud",
     "inga bevattningsförbud",
@@ -34,31 +36,44 @@ NEGATIVE_PHRASES = [
     "hävs",
     "är inte längre aktuellt"
 ]
+
 SKIP_PHRASES = [
     "publicerad", "uppdaterad", "kalkning", "senast ändrad"
 ]
 
-def extract_hits_with_context(text):
-    results = []
-    lines = text.split("\n")
+def extract_hits_with_context(soup, base_url, keywords):
+    hits = []
+    all_text_elements = soup.find_all(string=True)
 
-    for line in lines:
-        line_clean = line.strip()
-        line_lower = line_clean.lower()
+    for element in all_text_elements:
+        if any(keyword.lower() in element.lower() for keyword in keywords):
+            parent = element.parent
+            for _ in range(3):
+                if parent.name != 'a' and parent.find('a'):
+                    parent = parent.find('a')
+                elif parent.parent:
+                    parent = parent.parent
 
-        if not line_clean:
-            continue
+            href = parent.get('href') if parent else None
+            if href:
+                href = urljoin(base_url, href)
 
-        if any(bad in line_lower for bad in SKIP_PHRASES):
-            continue
+            context_parts = []
+            if element.parent and element.parent.parent:
+                for text in element.parent.parent.stripped_strings:
+                    context_parts.append(text.strip())
+            context = " ".join(context_parts)
 
-        if any(bad in line_lower for bad in NEGATIVE_PHRASES) and any(keyword in line_lower for keyword in KEYWORDS):
-            continue
+            sentences = re.split(r'(?:\n|\r|\r\n|(?<=[.!?])\s+)', context)
+            for sentence in sentences:
+                if any(keyword.lower() in sentence.lower() for keyword in keywords):
+                    hits.append((sentence.strip(), href))
+                    break
+            else:
+                if any(keyword.lower() in context.lower() for keyword in keywords):
+                    hits.append((context.strip(), href))
 
-        if any(keyword in line_lower for keyword in KEYWORDS):
-            results.append(("bevattningsförbud", line_clean))
-
-    return results
+    return hits
 
 def extract_date(text):
     text = text.lower()
@@ -99,7 +114,7 @@ def check_url(url):
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # 🔍 NYHETSLÄNKAR först (för Orust)
+        # Försök med nyhetslänkar först (t.ex. Orust)
         nyhetslänkar = soup.find_all("a", href=re.compile(r"/nyheter/", re.IGNORECASE))
         for a in nyhetslänkar:
             href = a.get("href")
@@ -108,59 +123,23 @@ def check_url(url):
                 try:
                     r_news = requests.get(news_url, headers=headers, timeout=30)
                     news_soup = BeautifulSoup(r_news.text, "html.parser")
-                    news_block = (
-                        news_soup.find("article") or
-                        news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
-                        news_soup.find("main") or
-                        news_soup
-                    )
-                    text = news_block.get_text()
 
-                    text_lower = text.lower()
+                    text_lower = news_soup.get_text().lower()
                     if any(neg in text_lower for neg in NEGATIVE_PHRASES):
                         continue
 
-                    hits = extract_hits_with_context(text)
+                    hits = extract_hits_with_context(news_soup, news_url, KEYWORDS)
                     if hits:
-                        return hits, text, news_url
+                        return hits, news_soup.get_text(), news_url
                 except Exception:
                     continue
 
         # Vanlig sökning på startsidan
-        a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
-        for a in a_tags:
-            href = a.get("href")
-            if href:
-                news_url = href if href.startswith("http") else url.rstrip("/") + href
-                try:
-                    r_news = requests.get(news_url, headers=headers, timeout=30)
-                    news_soup = BeautifulSoup(r_news.text, "html.parser")
-                    news_block = (
-                        news_soup.find("article") or
-                        news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
-                        news_soup.find("main") or
-                        news_soup
-                    )
-                    text = news_block.get_text()
+        hits = extract_hits_with_context(soup, url, KEYWORDS)
+        if hits:
+            return hits, soup.get_text(), url
 
-                    text_lower = text.lower()
-                    if any(neg in text_lower for neg in NEGATIVE_PHRASES):
-                        return [], text, news_url
-
-                    hits = extract_hits_with_context(text)
-                    return hits, text, news_url
-                except Exception:
-                    continue
-
-        main = soup.find("main") or soup
-        text = main.get_text()
-
-        text_lower = text.lower()
-        if any(neg in text_lower for neg in NEGATIVE_PHRASES):
-            return [], text, url
-
-        hits = extract_hits_with_context(text)
-        return hits, text, url
+        return [], "", url
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
@@ -192,7 +171,7 @@ def main():
             hits, full_text, actual_url = check_url(url)
             if hits:
                 date = None
-                for _, context in hits:
+                for context, _ in hits:
                     date = extract_date(context)
                     if date:
                         break
