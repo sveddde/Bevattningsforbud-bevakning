@@ -93,7 +93,7 @@ def send_email(message_body):
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
-            server.login(sender, os.getenv("GMAIL_APP_PASS"))  
+            server.login(sender, os.getenv("GMAIL_APP_PASS"))
             server.send_message(msg)
             print("Mail skickat.")
     except Exception as e:
@@ -102,20 +102,26 @@ def send_email(message_body):
 # ---- Huvudlogik ---- #
 html_pages = fetch_pages_parallel(list(kommun_urls.values()))
 
-mail_hits = []
+kommunträffar = {}
+
 for kommunnamn, url in kommun_urls.items():
     html = html_pages.get(url, "")
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(" ")
     matches = extract_hits_with_context(text)
     if matches:
+        bästa = ""
         for m in matches:
             datum = extract_date(m)
             datumtext = f"den {datum}" if datum else ""
-            mail_hits.append(f"{kommunnamn} har infört bevattningsförbud {datumtext}. Se länk för mer information: {url}")
+            meddelande = f"{kommunnamn} har infört bevattningsförbud {datumtext}. Se länk för mer information: {url}"
+            if datum:
+                bästa = meddelande
+                break
+            elif not bästa:
+                bästa = meddelande
+        kommunträffar[kommunnamn] = bästa
 
-if mail_hits:
-    # Ta bort dubbletter innan mail
-    mail_hits = list(set(mail_hits))
-    mail_body = "\n\n".join(mail_hits)
+if kommunträffar:
+    mail_body = "\n\n".join(kommunträffar.values())
     send_email(mail_body)
