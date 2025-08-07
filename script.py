@@ -136,5 +136,6 @@ for info in kommun_info:
                 mail_hits.append(f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}")
 
 if mail_hits:
-    mail_body = "\n\n".join(mail_hits)
+    unique_hits = sorted(set(mail_hits))  # Tar bort dubbletter och sorterar
+    mail_body = "\n\n".join(unique_hits)
     send_email(mail_body)
