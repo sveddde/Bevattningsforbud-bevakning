@@ -125,18 +125,31 @@ for info in kommun_info:
     if info["nyheter"] and pd.notna(info["nyheter"]) and info["nyheter"] != info["webbplats"]:
         texts_to_check.append(html_pages.get(info["nyheter"], ""))
 
+    # Samla alla matchningar för kommunen
+    match_texts = []
     for text_html in texts_to_check:
         soup = BeautifulSoup(text_html, "html.parser")
         text = soup.get_text(" ")
         matches = extract_hits_with_context(text)
-        if matches:
-            for m in matches:
-                datum = extract_date(m)
-                datumtext = f"den {datum}" if datum else ""
-                mail_hits.append(f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}")
+        match_texts.extend(matches)
 
-if mail_hits:
-    unique_hits = sorted(set(mail_hits))  # Ta bort dubbletter och sortera
+    if match_texts:
+        # Hitta första datumet som finns i matchningarna, annars tomt
+        datum = ""
+        for m in match_texts:
+            d = extract_date(m)
+            if d:
+                datum = d
+                break
+
+        datumtext = f"den {datum}" if datum else ""
+        rad = f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}"
+        mail_hits.append(rad)
+
+# Ta bort dubbletter och sortera innan mail
+unique_hits = sorted(set(mail_hits))
+
+if unique_hits:
     mail_body = "\n\n".join(unique_hits)
     send_email(mail_body)
 
