@@ -1,3 +1,4 @@
+# === script.py ===
 import csv
 import os
 import requests
@@ -14,16 +15,13 @@ TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
     "bevattningsförbud",
-    "Bevattningsförbud",
     "införs bevattningsförbud",
     "bevattningsförbudet gäller tillsvidare",
     "bevattningsförbud införs",
-    "Bevattningsförbud införs",
     "gäller bevattningsförbud",
     "har infört bevattningsförbud",
     "bevattningsförbud gäller"
 ]
-
 NEGATIVE_PHRASES = [
     "inget bevattningsförbud",
     "inga bevattningsförbud",
@@ -34,49 +32,44 @@ NEGATIVE_PHRASES = [
     "har upphävts",
     "har tagits bort",
     "hävs",
-    "är inte längre aktuellt"
+    "är inte längre aktuellt",
+    "bevattningsförbud upphävt"  # ny tillagd negativ fras
 ]
-
 SKIP_PHRASES = [
     "publicerad", "uppdaterad", "kalkning", "senast ändrad"
 ]
 
-def extract_hits_with_context(soup, base_url, keywords):
-    hits = []
-    all_text_elements = soup.find_all(string=True)
+def extract_hits_with_context(text):
+    results = []
+    lines = text.split("\n")
 
-    for element in all_text_elements:
-        if any(keyword.lower() in element.lower() for keyword in keywords):
-            parent = element.parent
-            for _ in range(3):
-                if parent.name != 'a' and parent.find('a'):
-                    parent = parent.find('a')
-                elif parent.parent:
-                    parent = parent.parent
+    for line in lines:
+        line_clean = line.strip()
+        line_lower = line_clean.lower()
 
-            href = parent.get('href') if parent else None
-            if href:
-                href = urljoin(base_url, href)
+        if not line_clean:
+            continue
 
-            context_parts = []
-            if element.parent and element.parent.parent:
-                for text in element.parent.parent.stripped_strings:
-                    context_parts.append(text.strip())
-            context = " ".join(context_parts)
+        # Skippa irrelevanta rader
+        if any(bad in line_lower for bad in SKIP_PHRASES):
+            continue
 
-            sentences = re.split(r'(?:\n|\r|\r\n|(?<=[.!?])\s+)', context)
-            for sentence in sentences:
-                if any(keyword.lower() in sentence.lower() for keyword in keywords):
-                    hits.append((sentence.strip(), href))
-                    break
-            else:
-                if any(keyword.lower() in context.lower() for keyword in keywords):
-                    hits.append((context.strip(), href))
+        # Skippa rader där både negativt och positivt nämns
+        if any(bad in line_lower for bad in NEGATIVE_PHRASES) and any(keyword in line_lower for keyword in KEYWORDS):
+            continue
 
-    return hits
+        # Matcha positiv fras utan negativ fras
+        if any(keyword in line_lower for keyword in KEYWORDS):
+            results.append(("bevattningsförbud", line_clean))
+
+    return results
 
 def extract_date(text):
     text = text.lower()
+
+    # Om text innehåller negativ fras, ignorera helt
+    if any(neg in text for neg in NEGATIVE_PHRASES):
+        return None
 
     pattern1 = re.compile(
         r"från och med (\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
@@ -114,9 +107,10 @@ def check_url(url):
         r = requests.get(url, headers=headers, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Försök med nyhetslänkar först (t.ex. Orust)
-        nyhetslänkar = soup.find_all("a", href=re.compile(r"/nyheter/", re.IGNORECASE))
-        for a in nyhetslänkar:
+        # Leta efter länkar som innehåller "bevattningsförbud"
+        a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
+
+        for a in a_tags:
             href = a.get("href")
             if href:
                 news_url = href if href.startswith("http") else url.rstrip("/") + href
@@ -124,22 +118,32 @@ def check_url(url):
                     r_news = requests.get(news_url, headers=headers, timeout=30)
                     news_soup = BeautifulSoup(r_news.text, "html.parser")
 
-                    text_lower = news_soup.get_text().lower()
-                    if any(neg in text_lower for neg in NEGATIVE_PHRASES):
+                    news_block = (
+                        news_soup.find("article") or
+                        news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
+                        news_soup.find("main") or
+                        news_soup
+                    )
+                    text = news_block.get_text()
+
+                    # Om någon negativ fras finns i texten, ignorera sidan helt
+                    if any(neg in text.lower() for neg in NEGATIVE_PHRASES):
                         continue
 
-                    hits = extract_hits_with_context(news_soup, news_url, KEYWORDS)
-                    if hits:
-                        return hits, news_soup.get_text(), news_url
+                    hits = extract_hits_with_context(text)
+                    return hits, text, news_url
                 except Exception:
                     continue
 
-        # Vanlig sökning på startsidan
-        hits = extract_hits_with_context(soup, url, KEYWORDS)
-        if hits:
-            return hits, soup.get_text(), url
+        main = soup.find("main") or soup
+        text = main.get_text()
 
-        return [], "", url
+        # Kontrollera negativ fras på fallback-sidan också
+        if any(neg in text.lower() for neg in NEGATIVE_PHRASES):
+            return [], "", url
+
+        hits = extract_hits_with_context(text)
+        return hits, text, url
 
     except Exception as e:
         print(f"⚠️ Fel vid kontroll av {url}: {e}")
@@ -171,7 +175,7 @@ def main():
             hits, full_text, actual_url = check_url(url)
             if hits:
                 date = None
-                for context, _ in hits:
+                for _, context in hits:
                     date = extract_date(context)
                     if date:
                         break
