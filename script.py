@@ -82,7 +82,7 @@ def extract_date(text):
 # ---- Mailfunktion ---- #
 def send_email(message_body):
     sender = os.getenv("GMAIL_USER")
-    receiver = os.getenv("GMAIL_RECEIVER")
+    receiver = os.getenv("TO_MAIL")
     subject = "Bevattningsförbud upptäckt"
 
     msg = MIMEText(message_body)
