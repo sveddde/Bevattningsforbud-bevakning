@@ -126,20 +126,27 @@ for info in kommun_info:
     if info["nyheter"] and pd.notna(info["nyheter"]) and info["nyheter"] != info["webbplats"]:
         texts_to_check.append(html_pages.get(info["nyheter"], ""))
 
-    unique_messages = set()
+    # Samla alla datum per kommun
+    dates_found = set()
     for text_html in texts_to_check:
         soup = BeautifulSoup(text_html, "html.parser")
         text = soup.get_text(" ")
         matches = extract_hits_with_context(text)
         for m in matches:
             datum = extract_date(m)
-            datumtext = f"den {datum}" if datum else ""
-            msg = f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}"
-            unique_messages.add(msg)
+            dates_found.add(datum)  # datum kan vara tom sträng ""
 
-    # Lägg bara till unika meddelanden per kommun
-    mail_hits.extend(sorted(unique_messages))
+    # Välj ett datum som helst inte ska vara tom sträng
+    chosen_date = ""
+    for d in dates_found:
+        if d:  # ta första icke-tomma datumet
+            chosen_date = d
+            break
+
+    datumtext = f"den {chosen_date}" if chosen_date else ""
+    mail_hits.append(f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}")
 
 if mail_hits:
     mail_body = "\n\n".join(mail_hits)
     send_email(mail_body)
+
