@@ -115,5 +115,7 @@ for kommunnamn, url in kommun_urls.items():
             mail_hits.append(f"{kommunnamn} har infört bevattningsförbud {datumtext}. Se länk för mer information: {url}")
 
 if mail_hits:
+    # Ta bort dubbletter innan mail
+    mail_hits = list(set(mail_hits))
     mail_body = "\n\n".join(mail_hits)
     send_email(mail_body)
