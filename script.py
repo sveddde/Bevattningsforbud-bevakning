@@ -2,10 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import pandas as pd
-from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
-from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 import os
@@ -35,7 +33,13 @@ NEGATIVE_PHRASES = [
 
 # ---- Läs in kommunlistan ---- #
 kommun_df = pd.read_csv("kommuner.csv")
-kommun_urls = dict(zip(kommun_df["kommun"], kommun_df["webbplats"]))
+kommun_info = []
+for _, row in kommun_df.iterrows():
+    kommun_info.append({
+        "kommun": row["kommun"],
+        "webbplats": row["webbplats"],
+        "nyheter": row.get("nyheter", "")  # Kan vara NaN eller tomt
+    })
 
 # ---- Caching + Parallell hämtning ---- #
 @lru_cache(maxsize=128)
@@ -51,7 +55,7 @@ def fetch_url(url):
 def fetch_pages_parallel(urls, max_workers=50):
     results = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_url = {executor.submit(fetch_url, url): url for url in urls}
+        future_to_url = {executor.submit(fetch_url, url): url for url in urls if url}
         for future in as_completed(future_to_url):
             url = future_to_url[future]
             try:
@@ -100,28 +104,37 @@ def send_email(message_body):
         print(f"Kunde inte skicka mail: {e}")
 
 # ---- Huvudlogik ---- #
-html_pages = fetch_pages_parallel(list(kommun_urls.values()))
 
-kommunträffar = {}
+# Samla alla URL:er från både webbplats och nyhetssida
+all_urls = []
+for info in kommun_info:
+    if info["webbplats"]:
+        all_urls.append(info["webbplats"])
+    if info["nyheter"] and pd.notna(info["nyheter"]) and info["nyheter"] != info["webbplats"]:
+        all_urls.append(info["nyheter"])
 
-for kommunnamn, url in kommun_urls.items():
-    html = html_pages.get(url, "")
-    soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text(" ")
-    matches = extract_hits_with_context(text)
-    if matches:
-        bästa = ""
-        for m in matches:
-            datum = extract_date(m)
-            datumtext = f"den {datum}" if datum else ""
-            meddelande = f"{kommunnamn} har infört bevattningsförbud {datumtext}. Se länk för mer information: {url}"
-            if datum:
-                bästa = meddelande
-                break
-            elif not bästa:
-                bästa = meddelande
-        kommunträffar[kommunnamn] = bästa
+# Hämta alla sidor parallellt
+html_pages = fetch_pages_parallel(all_urls)
 
-if kommunträffar:
-    mail_body = "\n\n".join(kommunträffar.values())
+# Kolla varje kommun på sina sidor
+mail_hits = []
+for info in kommun_info:
+    texts_to_check = []
+    if info["webbplats"]:
+        texts_to_check.append(html_pages.get(info["webbplats"], ""))
+    if info["nyheter"] and pd.notna(info["nyheter"]) and info["nyheter"] != info["webbplats"]:
+        texts_to_check.append(html_pages.get(info["nyheter"], ""))
+
+    for text_html in texts_to_check:
+        soup = BeautifulSoup(text_html, "html.parser")
+        text = soup.get_text(" ")
+        matches = extract_hits_with_context(text)
+        if matches:
+            for m in matches:
+                datum = extract_date(m)
+                datumtext = f"den {datum}" if datum else ""
+                mail_hits.append(f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}")
+
+if mail_hits:
+    mail_body = "\n\n".join(mail_hits)
     send_email(mail_body)
