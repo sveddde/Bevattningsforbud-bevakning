@@ -11,10 +11,6 @@ from email.mime.text import MIMEText
 import os
 
 # ---- Inställningar ---- #
-GMAIL_USER = os.getenv("GMAIL_USER")
-GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
-TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
-
 KEYWORDS = [
     "bevattningsförbud",
     "Bevattningsförbud",
@@ -78,7 +74,6 @@ def extract_hits_with_context(text):
     return matches
 
 def extract_date(text):
-    # Leta efter mönster som "1 augusti", "den 3 juli" etc.
     match = re.search(r"(?:den )?(\d{1,2}) (januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)", text, re.IGNORECASE)
     if match:
         return f"{match.group(1)} {match.group(2)}"
@@ -86,16 +81,20 @@ def extract_date(text):
 
 # ---- Mailfunktion ---- #
 def send_email(message_body):
-    subject = f"Bevattningsförbud upptäckt {datetime.today().date()}"
-    msg = MIMEText(message_body, "html")
-    msg["From"] = GMAIL_USER
-    msg["To"] = TO_EMAIL
+    sender = os.getenv("GMAIL_USER")
+    receiver = os.getenv("GMAIL_RECEIVER")
+    subject = "Bevattningsförbud upptäckt"
+
+    msg = MIMEText(message_body)
+    msg["From"] = sender
+    msg["To"] = receiver
     msg["Subject"] = subject
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(GMAIL_USER, GMAIL_APP_PASS)
-            smtp.send_message(msg)
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(sender, os.getenv("GMAIL_PASS"))
+            server.send_message(msg)
             print("Mail skickat.")
     except Exception as e:
         print(f"Kunde inte skicka mail: {e}")
@@ -113,8 +112,8 @@ for kommunnamn, url in kommun_urls.items():
         for m in matches:
             datum = extract_date(m)
             datumtext = f"den {datum}" if datum else ""
-            mail_hits.append(f"{kommunnamn} har infört bevattningsförbud {datumtext}. Se länk för mer information: <a href='{url}'>{url}</a>")
+            mail_hits.append(f"{kommunnamn} har infört bevattningsförbud {datumtext}. Se länk för mer information: {url}")
 
 if mail_hits:
-    mail_body = "<br><br>".join(mail_hits)
+    mail_body = "\n\n".join(mail_hits)
     send_email(mail_body)
