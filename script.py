@@ -93,7 +93,7 @@ def send_email(message_body):
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
-            server.login(sender, os.getenv("GMAIL_PASS"))
+            server.login(sender, os.getenv("GMAIL_APP_PASS"))  
             server.send_message(msg)
             print("Mail skickat.")
     except Exception as e:
