@@ -48,7 +48,7 @@ def fetch_url(url):
         print(f"Kunde inte hämta {url}: {e}")
         return ""
 
-def fetch_pages_parallel(urls, max_workers=48):
+def fetch_pages_parallel(urls, max_workers=50):
     results = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_url = {executor.submit(fetch_url, url): url for url in urls}
@@ -66,8 +66,8 @@ def extract_hits_with_context(text):
     matches = []
     for keyword in KEYWORDS:
         for match in re.finditer(re.escape(keyword), text, re.IGNORECASE):
-            start = max(match.start() - 80, 0)
-            end = min(match.end() + 80, len(text))
+            start = max(match.start() - 40, 0)
+            end = min(match.end() + 40, len(text))
             context = text[start:end]
             if not any(neg in context for neg in NEGATIVE_PHRASES):
                 matches.append(context)
