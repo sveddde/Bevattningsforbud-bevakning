@@ -116,8 +116,9 @@ for info in kommun_info:
 # Hämta alla sidor parallellt
 html_pages = fetch_pages_parallel(all_urls)
 
-# Kolla varje kommun på sina sidor
+# ---- Kolla varje kommun på sina sidor ---- #
 mail_hits = []
+
 for info in kommun_info:
     texts_to_check = []
     if info["webbplats"]:
@@ -125,17 +126,20 @@ for info in kommun_info:
     if info["nyheter"] and pd.notna(info["nyheter"]) and info["nyheter"] != info["webbplats"]:
         texts_to_check.append(html_pages.get(info["nyheter"], ""))
 
+    unique_messages = set()
     for text_html in texts_to_check:
         soup = BeautifulSoup(text_html, "html.parser")
         text = soup.get_text(" ")
         matches = extract_hits_with_context(text)
-        if matches:
-            for m in matches:
-                datum = extract_date(m)
-                datumtext = f"den {datum}" if datum else ""
-                mail_hits.append(f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}")
+        for m in matches:
+            datum = extract_date(m)
+            datumtext = f"den {datum}" if datum else ""
+            msg = f"{info['kommun']} har infört bevattningsförbud {datumtext}. Se länk för mer information: {info['webbplats']}"
+            unique_messages.add(msg)
+
+    # Lägg bara till unika meddelanden per kommun
+    mail_hits.extend(sorted(unique_messages))
 
 if mail_hits:
-    unique_hits = sorted(set(mail_hits))  # Tar bort dubbletter och sorterar
-    mail_body = "\n\n".join(unique_hits)
+    mail_body = "\n\n".join(mail_hits)
     send_email(mail_body)
