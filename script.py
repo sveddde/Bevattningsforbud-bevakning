@@ -1,201 +1,120 @@
-# === script.py ===
-import csv
-import os
 import requests
 from bs4 import BeautifulSoup
+import re
+import pandas as pd
+from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
+from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime
-import re
-from urllib.parse import urljoin
+import os
 
+# ---- Inställningar ---- #
 GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 TO_EMAIL = os.getenv("TO_EMAIL", GMAIL_USER)
 
 KEYWORDS = [
     "bevattningsförbud",
+    "Bevattningsförbud",
     "införs bevattningsförbud",
     "bevattningsförbudet gäller tillsvidare",
     "bevattningsförbud införs",
+    "Bevattningsförbud införs",
     "gäller bevattningsförbud",
     "har infört bevattningsförbud",
     "bevattningsförbud gäller"
 ]
+
 NEGATIVE_PHRASES = [
-    "inget bevattningsförbud",
-    "inga bevattningsförbud",
-    "upphävt bevattningsförbud",
-    "bevattningsförbudet upphävs",
-    "upphävts",
-    "upphävdes",
-    "har upphävts",
-    "har tagits bort",
+    "upphävt",
+    "upphört",
+    "inte längre",
+    "hävt",
     "hävs",
-    "är inte längre aktuellt",
-    "bevattningsförbud upphävt"  # ny tillagd negativ fras
-]
-SKIP_PHRASES = [
-    "publicerad", "uppdaterad", "kalkning", "senast ändrad"
+    "slutat gälla",
+    "Bevattningsförbud upphävt"
 ]
 
-def extract_hits_with_context(text):
-    results = []
-    lines = text.split("\n")
+# ---- Läs in kommunlistan ---- #
+kommun_df = pd.read_csv("kommuner.csv")
+kommun_urls = dict(zip(kommun_df["Kommun"], kommun_df["URL"]))
 
-    for line in lines:
-        line_clean = line.strip()
-        line_lower = line_clean.lower()
+# ---- Caching + Parallell hämtning ---- #
+@lru_cache(maxsize=128)
+def fetch_url(url):
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.text
+    except Exception as e:
+        print(f"Kunde inte hämta {url}: {e}")
+        return ""
 
-        if not line_clean:
-            continue
-
-        # Skippa irrelevanta rader
-        if any(bad in line_lower for bad in SKIP_PHRASES):
-            continue
-
-        # Skippa rader där både negativt och positivt nämns
-        if any(bad in line_lower for bad in NEGATIVE_PHRASES) and any(keyword in line_lower for keyword in KEYWORDS):
-            continue
-
-        # Matcha positiv fras utan negativ fras
-        if any(keyword in line_lower for keyword in KEYWORDS):
-            results.append(("bevattningsförbud", line_clean))
-
+def fetch_pages_parallel(urls, max_workers=48):
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_url = {executor.submit(fetch_url, url): url for url in urls}
+        for future in as_completed(future_to_url):
+            url = future_to_url[future]
+            try:
+                html = future.result()
+                results[url] = html
+            except Exception as e:
+                print(f"Fel vid hämtning av {url}: {e}")
     return results
 
+# ---- Datumextraktion ---- #
+def extract_hits_with_context(text):
+    matches = []
+    for keyword in KEYWORDS:
+        for match in re.finditer(re.escape(keyword), text, re.IGNORECASE):
+            start = max(match.start() - 80, 0)
+            end = min(match.end() + 80, len(text))
+            context = text[start:end]
+            if not any(neg in context for neg in NEGATIVE_PHRASES):
+                matches.append(context)
+    return matches
+
 def extract_date(text):
-    text = text.lower()
-
-    # Om text innehåller negativ fras, ignorera helt
-    if any(neg in text for neg in NEGATIVE_PHRASES):
-        return None
-
-    pattern1 = re.compile(
-        r"från och med (\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
-        re.IGNORECASE
-    )
-    match = pattern1.search(text)
+    # Leta efter mönster som "1 augusti", "den 3 juli" etc.
+    match = re.search(r"(?:den )?(\d{1,2}) (januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)", text, re.IGNORECASE)
     if match:
-        return f"{match.group(1)} {match.group(2).lower()}"
+        return f"{match.group(1)} {match.group(2)}"
+    return ""
 
-    pattern2 = re.compile(
-        r"(\d{1,2})\s+(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)",
-        re.IGNORECASE
-    )
-    match = pattern2.search(text)
-    if match:
-        return f"{match.group(1)} {match.group(2).lower()}"
-
-    match_iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text)
-    if match_iso:
-        try:
-            date = datetime.strptime(match_iso.group(0), "%Y-%m-%d")
-            return date.strftime("%-d %B").lower()
-        except:
-            pass
-
-    return None
-
-def check_url(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.188"
-    }
-    try:
-        r = requests.get(url, headers=headers, timeout=30)
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        # Leta efter länkar som innehåller "bevattningsförbud"
-        a_tags = soup.find_all("a", string=re.compile(r"bevattningsförbud", re.IGNORECASE))
-
-        for a in a_tags:
-            href = a.get("href")
-            if href:
-                news_url = href if href.startswith("http") else url.rstrip("/") + href
-                try:
-                    r_news = requests.get(news_url, headers=headers, timeout=30)
-                    news_soup = BeautifulSoup(r_news.text, "html.parser")
-
-                    news_block = (
-                        news_soup.find("article") or
-                        news_soup.find("div", class_=re.compile(r"news|artikel", re.IGNORECASE)) or
-                        news_soup.find("main") or
-                        news_soup
-                    )
-                    text = news_block.get_text()
-
-                    # Om någon negativ fras finns i texten, ignorera sidan helt
-                    if any(neg in text.lower() for neg in NEGATIVE_PHRASES):
-                        continue
-
-                    hits = extract_hits_with_context(text)
-                    return hits, text, news_url
-                except Exception:
-                    continue
-
-        main = soup.find("main") or soup
-        text = main.get_text()
-
-        # Kontrollera negativ fras på fallback-sidan också
-        if any(neg in text.lower() for neg in NEGATIVE_PHRASES):
-            return [], "", url
-
-        hits = extract_hits_with_context(text)
-        return hits, text, url
-
-    except Exception as e:
-        print(f"⚠️ Fel vid kontroll av {url}: {e}")
-        return [], "", url
-
-def send_email(subject, body):
-    msg = MIMEText(body, "html")
-    msg["Subject"] = subject
+# ---- Mailfunktion ---- #
+def send_email(message_body):
+    subject = f"Bevattningsförbud upptäckt {datetime.today().date()}"
+    msg = MIMEText(message_body, "html")
     msg["From"] = GMAIL_USER
     msg["To"] = TO_EMAIL
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(GMAIL_USER, GMAIL_APP_PASS)
-        smtp.send_message(msg)
+    msg["Subject"] = subject
 
-def main():
-    alerts = []
-    seen_kommuner = set()
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(GMAIL_USER, GMAIL_APP_PASS)
+            smtp.send_message(msg)
+            print("Mail skickat.")
+    except Exception as e:
+        print(f"Kunde inte skicka mail: {e}")
 
-    with open("kommuner.csv", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            kommun = row["kommun"]
-            url = row["webbplats"]
+# ---- Huvudlogik ---- #
+html_pages = fetch_pages_parallel(list(kommun_urls.values()))
 
-            if kommun in seen_kommuner:
-                continue
-            seen_kommuner.add(kommun)
+mail_hits = []
+for kommunnamn, url in kommun_urls.items():
+    html = html_pages.get(url, "")
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(" ")
+    matches = extract_hits_with_context(text)
+    if matches:
+        for m in matches:
+            datum = extract_date(m)
+            datumtext = f"den {datum}" if datum else ""
+            mail_hits.append(f"{kommunnamn} har infört bevattningsförbud {datumtext}. Se länk för mer information: <a href='{url}'>{url}</a>")
 
-            hits, full_text, actual_url = check_url(url)
-            if hits:
-                date = None
-                for _, context in hits:
-                    date = extract_date(context)
-                    if date:
-                        break
-
-                if not date:
-                    date = extract_date(full_text)
-
-                if date:
-                    alert_text = f"{kommun} har infört bevattningsförbud den {date}. Se länk för mer information: <a href='{actual_url}'>{actual_url}</a>"
-                else:
-                    alert_text = f"{kommun} har infört bevattningsförbud. Se länk för mer information: <a href='{actual_url}'>{actual_url}</a>"
-
-                alerts.append(alert_text)
-
-    if alerts:
-        body = "<br><br>".join(alerts)
-        send_email(
-            f"Bevattningsförbud upptäckt {datetime.today().date()}",
-            body
-        )
-
-if __name__ == "__main__":
-    main()
+if mail_hits:
+    mail_body = "<br><br>".join(mail_hits)
+    send_email(mail_body)
