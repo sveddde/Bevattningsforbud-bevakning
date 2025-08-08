@@ -3,6 +3,7 @@ name: Daglig bevakning
 on:
   schedule:
    - cron: '0 8 * * *'  # Körs dagligen kl 08:00 UTC (09:00 svensk tid)
+   - cron: '0 10 * * *'  # Körs dagligen kl 08:00 UTC (09:00 svensk tid)
   workflow_dispatch:
 
 jobs:
