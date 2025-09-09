@@ -10,8 +10,8 @@ on:
    - cron: '0 6 * 7 4'  # Körs dagligen kl 06:00 UTC (08:00 svensk tid)
    - cron: '0 6 * 8 2'  # Körs dagligen kl 06:00 UTC (08:00 svensk tid)
    - cron: '0 6 * 8 4'  # Körs dagligen kl 06:00 UTC (08:00 svensk tid)
-   - cron: '0 6 * 9 2'  # Körs dagligen kl 06:00 UTC (08:00 svensk tid)
-   - cron: '0 6 * 9 4'  # Körs dagligen kl 06:00 UTC (08:00 svensk tid)  
+   #- cron: '0 6 * 9 2'  # Körs dagligen kl 06:00 UTC (08:00 svensk tid)
+   #- cron: '0 6 * 9 4'  # Körs dagligen kl 06:00 UTC (08:00 svensk tid)  
   workflow_dispatch:
 
 jobs:
